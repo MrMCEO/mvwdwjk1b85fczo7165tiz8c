@@ -1,0 +1,9 @@
+aiogram>=3.15
+SQLAlchemy>=2.0
+aiosqlite>=0.20
+alembic>=1.14
+pydantic-settings>=2.7
+pytest>=8.0
+pytest-asyncio>=0.24
+ruff>=0.8
+apscheduler>=3.10

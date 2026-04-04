@@ -16,6 +16,7 @@ from __future__ import annotations
 import math
 import random
 from datetime import UTC, datetime, timedelta
+from html import escape
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,7 @@ from bot.services.event import get_event_modifier
 from bot.services.laboratory import get_active_item_effect
 from bot.services.market import check_contract_completion
 from bot.services.mutation_effects import apply_mutation_to_attack, apply_mutation_to_defense
+from bot.services.player import DEFAULT_VIRUS_NAME
 from bot.services.premium import get_attack_cooldown, get_attack_limits
 
 # Base damage per tick before lethality adjustments
@@ -113,17 +115,19 @@ async def attack_player(
     session: AsyncSession,
     attacker_id: int,
     victim_id: int,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, dict | None]:
     """
     Attempt to infect *victim_id* using *attacker_id*'s virus.
 
-    Returns (success, message) where message contains human-readable details
-    about the outcome regardless of success/failure.
+    Returns (success, message, victim_notification) where:
+    - message contains human-readable details for the attacker.
+    - victim_notification is a dict {"user_id": int, "message": str} to be sent
+      to the victim on success, or None on failure.
     """
 
     # --- Self-attack guard ---
     if attacker_id == victim_id:
-        return False, "Нельзя атаковать самого себя."
+        return False, "Нельзя атаковать самого себя.", None
 
     # --- Resolve premium-aware limits for the attacker ---
     max_attempts, max_infections = await get_attack_limits(session, attacker_id)
@@ -142,7 +146,7 @@ async def attack_player(
         return False, (
             f"Вы уже атаковали этого игрока {max_attempts} раз за последний час. "
             "Попробуйте позже."
-        )
+        ), None
 
     # --- Rate limit: successful infections per hour (all targets) ---
     successful_infections = await session.execute(
@@ -156,17 +160,17 @@ async def attack_player(
     if success_count >= max_infections:
         return False, (
             f"Вы достигли лимита заражений ({max_infections} в час). Попробуйте позже."
-        )
+        ), None
 
     # --- Check both players exist ---
     # Lock attacker row to prevent concurrent attacks from the same user
     attacker = await _get_user(session, attacker_id, lock=True)
     if attacker is None:
-        return False, "Атакующий игрок не найден. Создай профиль через /start."
+        return False, "Атакующий игрок не найден. Создай профиль через /start.", None
 
     victim = await _get_user(session, victim_id)
     if victim is None:
-        return False, "Жертва не найдена."
+        return False, "Жертва не найдена.", None
 
     # --- Cooldown: look at last infection this attacker has sent (any victim) ---
     attack_cooldown = await get_attack_cooldown(session, attacker_id)
@@ -187,7 +191,7 @@ async def attack_player(
             return False, (
                 f"Кулдаун атаки ещё не истёк. "
                 f"Следующая атака через {minutes}м {seconds}с."
-            )
+            ), None
 
     # --- Victim already infected by this attacker? ---
     already_infected_result = await session.execute(
@@ -201,17 +205,17 @@ async def attack_player(
     )
     already_infected = already_infected_result.scalar_one_or_none()
     if already_infected is not None:
-        return False, "Этот игрок уже заражён твоим вирусом."
+        return False, "Этот игрок уже заражён твоим вирусом.", None
 
     # --- Load attacker's virus with upgrades ---
     virus, virus_upgrades = await _load_virus_with_upgrades(session, attacker_id)
     if virus is None:
-        return False, "У тебя ещё нет вируса. Используй /start, чтобы создать профиль."
+        return False, "У тебя ещё нет вируса. Используй /start, чтобы создать профиль.", None
 
     # --- Load victim's immunity with upgrades ---
     immunity, immunity_upgrades = await _load_immunity_with_upgrades(session, victim_id)
     if immunity is None:
-        return False, "У жертвы ещё нет иммунитета."
+        return False, "У жертвы ещё нет иммунитета.", None
 
     # --- Attack score ---
     # Base: attack_power (default 10). spread_rate is now a direct multiplier (default 1.0).
@@ -240,7 +244,7 @@ async def attack_player(
     # --- Event modifiers ---
     can_attack = await get_event_modifier(session, "can_attack")
     if not can_attack:
-        return False, "Сейчас действует перемирие (🕊 Ceasefire). Атаки запрещены."
+        return False, "Сейчас действует перемирие (🕊 Ceasefire). Атаки запрещены.", None
 
     attack_chance_mult = await get_event_modifier(session, "attack_chance_mult")
     attack_score *= attack_chance_mult
@@ -258,7 +262,7 @@ async def attack_player(
     defense_score *= def_mods.get("defense_mult", 1.0)
 
     if def_mods.get("absolute_immunity"):
-        return False, "Цель под защитой Абсолютного иммунитета! Атака невозможна."
+        return False, "Цель под защитой Абсолютного иммунитета! Атака невозможна.", None
 
     # --- Alliance bonuses ---
     atk_alliance_bonus = await get_alliance_attack_bonus(session, attacker_id)
@@ -301,7 +305,7 @@ async def attack_player(
             f"Атака провалилась! "
             f"Шанс заражения был {chance * 100:.1f}% (бросок: {roll * 100:.1f}%). "
             f"Иммунитет жертвы устоял."
-        )
+        ), None
 
     # --- Calculate damage_per_tick ---
     # Lethality increases base damage (+2.0 per level; lvl10 = 25 total)
@@ -343,11 +347,33 @@ async def attack_player(
     from bot.services.event import track_activity
     await track_activity(session, attacker_id, "attack")
 
-    victim_display = victim.username or str(victim_id)
+    # Virus display suffix — shown only when a custom name is set
+    virus_display = ""
+    if virus.name and virus.name != DEFAULT_VIRUS_NAME:
+        virus_display = f" вирусом «{escape(virus.name)}»"
+
+    victim_display = escape(victim.username or str(victim_id))
+    attacker_display = escape(attacker.username or str(attacker_id))
+
+    # Victim sees the attacker only when effective_detection > 0
+    # (base detection_power=0.1 means most players are detected unless attacker maxes STEALTH)
+    if effective_detection > 0.0:
+        victim_notification: dict = {
+            "user_id": victim_id,
+            "notify_type": "attacks",
+            "message": f"⚠️ Вас заразил{virus_display} игрок @{attacker_display}!",
+        }
+    else:
+        victim_notification = {
+            "user_id": victim_id,
+            "notify_type": "attacks",
+            "message": f"⚠️ Вас заразили{virus_display}! Атакующий неизвестен.",
+        }
+
     return True, (
-        f"Атака успешна! Игрок {victim_display} заражён. "
+        f"✅ Атака{virus_display} на @{victim_display} успешна! "
         f"Шанс был {chance * 100:.1f}%, урон в тик: {damage_per_tick:.1f} 🧫 BioCoins."
-    )
+    ), victim_notification
 
 
 async def get_active_infections_by(

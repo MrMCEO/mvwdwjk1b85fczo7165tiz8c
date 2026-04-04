@@ -14,6 +14,7 @@ from bot.handlers.attack import router as attack_router
 from bot.handlers.events import router as events_router
 from bot.handlers.immunity import router as immunity_router
 from bot.handlers.info import router as info_router
+from bot.handlers.inline import router as inline_router
 from bot.handlers.laboratory import router as laboratory_router
 from bot.handlers.market import router as market_router
 from bot.handlers.menu import router as menu_router
@@ -23,6 +24,7 @@ from bot.handlers.profile import router as profile_router
 from bot.handlers.rating import router as rating_router
 from bot.handlers.referral import router as referral_router
 from bot.handlers.resources import router as resources_router
+from bot.handlers.settings import router as settings_router
 from bot.handlers.shop import router as shop_router
 from bot.handlers.start import router as start_router
 from bot.handlers.text_commands import router as text_commands_router
@@ -84,9 +86,12 @@ async def main() -> None:
     dp.include_router(laboratory_router)
     dp.include_router(market_router)
     dp.include_router(referral_router)
+    dp.include_router(settings_router)
     dp.include_router(transfer_router)
     # Admin router before text_commands to handle /admin, FSM states, callbacks
     dp.include_router(admin_router)
+    # Inline-mode handler — before text_commands to avoid interception
+    dp.include_router(inline_router)
     # Text commands MUST be last — otherwise may intercept FSM input (e.g. attack username)
     dp.include_router(text_commands_router)
 

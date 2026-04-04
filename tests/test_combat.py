@@ -47,10 +47,12 @@ async def test_attack_player_success(session: AsyncSession):
 
     # Force random to return a very low value → attack always wins
     with patch("bot.services.combat.random.random", return_value=0.0):
-        success, msg = await attack_player(session, attacker_id=4001, victim_id=4002)
+        success, msg, victim_notif = await attack_player(session, attacker_id=4001, victim_id=4002)
 
     assert success is True
-    assert "заражён" in msg
+    assert "@victim1" in msg  # victim username appears in attacker's success message
+    assert victim_notif is not None
+    assert victim_notif["user_id"] == 4002
 
     infections = await get_active_infections_by(session, user_id=4001)
     assert len(infections) == 1
@@ -61,9 +63,10 @@ async def test_attack_player_success(session: AsyncSession):
 async def test_attack_self(session: AsyncSession):
     """Attacking yourself returns False."""
     await create_player(session, tg_id=4010, username="selfie")
-    success, msg = await attack_player(session, attacker_id=4010, victim_id=4010)
+    success, msg, victim_notif = await attack_player(session, attacker_id=4010, victim_id=4010)
     assert success is False
     assert "самого себя" in msg
+    assert victim_notif is None
 
 
 async def test_attack_cooldown(session: AsyncSession):
@@ -74,12 +77,12 @@ async def test_attack_cooldown(session: AsyncSession):
 
     # First attack succeeds
     with patch("bot.services.combat.random.random", return_value=0.0):
-        success1, _ = await attack_player(session, attacker_id=4020, victim_id=4021)
+        success1, _, _notif1 = await attack_player(session, attacker_id=4020, victim_id=4021)
     assert success1 is True
 
     # Second attack immediately after should fail due to cooldown
     with patch("bot.services.combat.random.random", return_value=0.0):
-        success2, msg2 = await attack_player(session, attacker_id=4020, victim_id=4022)
+        success2, msg2, _notif2 = await attack_player(session, attacker_id=4020, victim_id=4022)
     assert success2 is False
     assert "Кулдаун" in msg2 or "не истёк" in msg2
 
@@ -103,7 +106,7 @@ async def test_attack_already_infected(session: AsyncSession):
 
     # Now try to attack the same victim again — should fail (already infected)
     with patch("bot.services.combat.random.random", return_value=0.0):
-        success, msg = await attack_player(session, attacker_id=4030, victim_id=4031)
+        success, msg, _ = await attack_player(session, attacker_id=4030, victim_id=4031)
 
     assert success is False
     assert "уже заражён" in msg
@@ -116,7 +119,7 @@ async def test_attack_fails_on_high_roll(session: AsyncSession):
 
     # Force random to return 1.0 → attack always fails
     with patch("bot.services.combat.random.random", return_value=1.0):
-        success, msg = await attack_player(session, attacker_id=4040, victim_id=4041)
+        success, msg, _ = await attack_player(session, attacker_id=4040, victim_id=4041)
 
     assert success is False
     assert "провалилась" in msg

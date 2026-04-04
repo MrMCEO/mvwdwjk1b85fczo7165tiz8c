@@ -34,6 +34,7 @@ from bot.keyboards.profile import profile_kb
 from bot.keyboards.rating import rating_menu_kb
 from bot.keyboards.referral import referral_menu_kb
 from bot.keyboards.resources import resources_menu_kb
+from bot.keyboards.settings import settings_kb
 from bot.keyboards.shop import shop_menu_kb
 from bot.keyboards.transfer import transfer_menu_kb
 from bot.keyboards.virus import virus_menu_kb
@@ -87,6 +88,8 @@ _PREMIUM_TRIGGERS = {"премиум", "подписка", "⭐ премиум"}
 _REFERRAL_TRIGGERS = {"рефералы", "реферал", "ref", "🤝 рефералы"}
 
 _TRANSFER_TRIGGERS = {"перевод", "передать", "перевести", "💸 передать"}
+
+_SETTINGS_TRIGGERS = {"настройки", "⚙️ настройки"}
 
 
 # ---------------------------------------------------------------------------
@@ -392,3 +395,31 @@ async def text_transfer(message: Message, session: AsyncSession) -> None:
         reply_markup=transfer_menu_kb(daily_used, daily_limit),
         parse_mode="HTML",
     )
+
+
+# ---------------------------------------------------------------------------
+# Настройки уведомлений
+# ---------------------------------------------------------------------------
+
+
+@router.message(F.text.lower().in_(_SETTINGS_TRIGGERS))
+async def text_settings(message: Message, session: AsyncSession) -> None:
+    """Текстовая команда: открыть настройки уведомлений."""
+    from sqlalchemy import select
+
+    from bot.models.user import User
+
+    result = await session.execute(select(User).where(User.tg_id == message.from_user.id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        await message.answer("❌ Игрок не найден. Используй /start.")
+        return
+
+    text = (
+        "⚙️ <b>Настройки уведомлений</b>\n\n"
+        f"⚔️ Атаки: {'✅ Вкл' if user.notify_attacks else '❌ Выкл'}\n"
+        f"🦠 Заражения: {'✅ Вкл' if user.notify_infections else '❌ Выкл'}\n"
+        f"⏱ Кулдауны: {'✅ Вкл' if user.notify_cooldowns else '❌ Выкл'}\n"
+        f"🌍 Ивенты: {'✅ Вкл' if user.notify_events else '❌ Выкл'}\n"
+    )
+    await message.answer(text, reply_markup=settings_kb(user), parse_mode="HTML")

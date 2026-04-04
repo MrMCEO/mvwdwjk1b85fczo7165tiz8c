@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bot.models.base import Base
@@ -44,6 +44,12 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(
         String(120), nullable=True, default=None
     )  # Кастомное отображаемое имя (до 20 символов видимых; String(120) — запас для HTML-escape)
+
+    # Notification preferences
+    notify_attacks: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    notify_infections: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    notify_cooldowns: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    notify_events: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
 
     # Relationships
     virus: Mapped["Virus"] = relationship(

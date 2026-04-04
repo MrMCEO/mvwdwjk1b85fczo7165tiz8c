@@ -22,6 +22,7 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     builder.button(text="⭐ Премиум",          callback_data="premium_menu")
     builder.button(text="🤝 Рефералы",         callback_data="referral_menu")
     builder.button(text="💸 Передать",         callback_data="transfer_menu")
+    builder.button(text="⚙️ Настройки",        callback_data="settings_menu")
     # 2 per row for most rows, last row centred (1 button)
-    builder.adjust(2, 2, 2, 2, 2, 2, 2, 2, 1)
+    builder.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2)
     return builder.as_markup()

@@ -21,6 +21,7 @@ from bot.services.combat import (
     get_active_infections_on,
     try_cure,
 )
+from bot.services.notifications import should_notify
 
 router = Router(name="attack")
 
@@ -129,7 +130,9 @@ async def cb_confirm_attack(callback: CallbackQuery, session: AsyncSession) -> N
         await callback.answer("Неверные данные атаки.", show_alert=True)
         return
 
-    success, msg = await attack_player(session, callback.from_user.id, victim_id)
+    success, msg, victim_notification = await attack_player(
+        session, callback.from_user.id, victim_id
+    )
 
     icon = "✅" if success else "❌"
     await callback.message.edit_text(
@@ -138,6 +141,19 @@ async def cb_confirm_attack(callback: CallbackQuery, session: AsyncSession) -> N
         parse_mode="HTML",
     )
     await callback.answer("Атака выполнена!" if success else "Атака провалена!")
+
+    # Notify the victim about being infected (best-effort — ignore if blocked)
+    if victim_notification:
+        notify_type = victim_notification.get("notify_type", "attacks")
+        if await should_notify(session, victim_notification["user_id"], notify_type):
+            try:
+                await callback.bot.send_message(
+                    chat_id=victim_notification["user_id"],
+                    text=victim_notification["message"],
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------

@@ -24,14 +24,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from html import escape
+
 from bot.models.base import AsyncSessionFactory
 from bot.models.immunity import Immunity, ImmunityBranch
 from bot.models.infection import Infection
 from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
+from bot.models.virus import Virus
 from bot.services.alliance import get_alliance_regen_bonus
 from bot.services.event import expire_events
+from bot.services.notifications import should_notify
+from bot.services.player import DEFAULT_VIRUS_NAME
 from bot.services.premium import format_username
 from bot.services.referral import deactivate_stale_referrals
 
@@ -87,12 +92,13 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
     """
     notifications: list[dict] = []
 
-    # Load all active infections (with attacker/victim users, victim immunity + upgrades)
+    # Load all active infections (with attacker/victim users, victim immunity + upgrades,
+    # and attacker's virus for name display in notifications)
     result = await session.execute(
         select(Infection)
         .where(Infection.is_active == True)  # noqa: E712
         .options(
-            selectinload(Infection.attacker),
+            selectinload(Infection.attacker).selectinload(User.virus),
             selectinload(Infection.victim)
             .selectinload(User.immunity)
             .selectinload(Immunity.upgrades),  # needed for REGENERATION effect
@@ -143,18 +149,31 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
 
                 notifications.append({
                     "user_id": attacker.tg_id,
+                    "notify_type": "infections",
                     "message": (
                         f"Пассивный доход: +{attacker_gain} 🧫 BioCoins "
                         f"от заражения игрока {_fmt_user(victim)}."
                     ),
                 })
 
+            # Build victim drain notification with optional custom virus name
+            attacker_virus = getattr(attacker, "virus", None)
+            if (
+                attacker_virus is not None
+                and attacker_virus.name
+                and attacker_virus.name != DEFAULT_VIRUS_NAME
+            ):
+                drain_msg = (
+                    f"🦠 Вирус «{escape(attacker_virus.name)}» "
+                    f"забрал у вас {drain} 🧫 BioCoins"
+                )
+            else:
+                drain_msg = f"🦠 Заражение забрало у вас {drain} 🧫 BioCoins"
+
             notifications.append({
                 "user_id": victim.tg_id,
-                "message": (
-                    f"Вирус от {_fmt_user(attacker)} наносит урон: -{drain} 🧫 BioCoins. "
-                    f"Баланс: {victim.bio_coins} 🧫 BioCoins."
-                ),
+                "notify_type": "infections",
+                "message": drain_msg,
             })
 
         # --- Auto-cure roll ---
@@ -180,6 +199,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
             )
             notifications.append({
                 "user_id": victim.tg_id,
+                "notify_type": "infections",
                 "message": (
                     f"Твой иммунитет победил! "
                     f"Заражение #{inf.id} вылечено автоматически."
@@ -187,6 +207,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
             })
             notifications.append({
                 "user_id": attacker.tg_id,
+                "notify_type": "infections",
                 "message": (
                     f"Игрок {_fmt_user(victim)} "
                     f"вылечился от твоего вируса (заражение #{inf.id})."
@@ -234,23 +255,32 @@ async def start_scheduler(bot) -> None:  # bot: aiogram.Bot
                 logger.exception("Scheduler: tick failed, transaction rolled back.")
                 return
 
-        # Send notifications outside the DB session
-        for note in notifications:
-            try:
-                await bot.send_message(
-                    chat_id=note["user_id"],
-                    text=note["message"],
-                    parse_mode="HTML",
-                )
-            except Exception as exc:
-                # User may have blocked the bot — log and continue
-                logger.warning(
-                    "Scheduler: could not send notification to %s: %s",
-                    note["user_id"], exc,
-                )
+        # Send notifications outside the DB session (check user prefs first)
+        sent_count = 0
+        async with AsyncSessionFactory() as notify_session:
+            for note in notifications:
+                notify_type = note.get("notify_type")
+                if notify_type:
+                    allowed = await should_notify(notify_session, note["user_id"], notify_type)
+                    if not allowed:
+                        continue
+                try:
+                    await bot.send_message(
+                        chat_id=note["user_id"],
+                        text=note["message"],
+                        parse_mode="HTML",
+                    )
+                    sent_count += 1
+                except Exception as exc:
+                    # User may have blocked the bot — log and continue
+                    logger.warning(
+                        "Scheduler: could not send notification to %s: %s",
+                        note["user_id"], exc,
+                    )
 
         logger.info(
-            "Scheduler: tick complete, %d notification(s) sent.", len(notifications)
+            "Scheduler: tick complete, %d/%d notification(s) sent.",
+            sent_count, len(notifications),
         )
 
     scheduler.add_job(

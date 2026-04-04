@@ -29,7 +29,7 @@ _INVITE_MSG = (
     "🦠 Качай вирус и заражай соперников\n"
     "🛡 Прокачивай иммунитет и защищайся\n"
     "🏰 Вступай в альянсы и участвуй в ивентах\n\n"
-    "👉 https://t.me/BestBIOwarsrobot?start=ref_{user_id}"
+    '👉 <a href="https://t.me/BestBIOwarsrobot?start=ref_{user_id}">Играть со мной!</a>'
 )
 
 _UNREGISTERED_MSG = (

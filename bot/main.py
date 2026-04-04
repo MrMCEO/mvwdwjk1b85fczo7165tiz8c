@@ -1,13 +1,16 @@
 import asyncio
 import logging
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from bot.config import get_settings
 from bot.handlers.attack import router as attack_router
 from bot.handlers.immunity import router as immunity_router
+from bot.handlers.info import router as info_router
 from bot.handlers.menu import router as menu_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.rating import router as rating_router
@@ -37,9 +40,12 @@ async def on_startup(bot: Bot) -> None:
 async def main() -> None:
     settings = get_settings()
 
+    proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    session = AiohttpSession(proxy=proxy) if proxy else AiohttpSession()
     bot = Bot(
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        session=session,
     )
 
     dp = Dispatcher()
@@ -52,6 +58,7 @@ async def main() -> None:
 
     # Connect routers — order matters: start first, then menu, then sections
     dp.include_router(start_router)
+    dp.include_router(info_router)
     dp.include_router(menu_router)
     dp.include_router(virus_router)
     dp.include_router(immunity_router)

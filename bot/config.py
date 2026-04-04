@@ -13,11 +13,15 @@ class Settings(BaseSettings):
 
     bot_token: str
     admin_ids: list[int] = []
-    db_url: str = "sqlite+aiosqlite:///data/biowars.db"
+    db_url: str = "sqlite+aiosqlite:///./data/biowars.db"
 
     @field_validator("admin_ids", mode="before")
     @classmethod
-    def parse_admin_ids(cls, v: str | list) -> list[int]:
+    def parse_admin_ids(cls, v: str | list | int | None) -> list[int]:
+        if not v and v != 0:
+            return []
+        if isinstance(v, int):
+            return [v]
         if isinstance(v, str):
             return [int(i.strip()) for i in v.split(",") if i.strip()]
         return v

@@ -1,5 +1,6 @@
 from bot.handlers.attack import router as attack_router
 from bot.handlers.immunity import router as immunity_router
+from bot.handlers.info import router as info_router
 from bot.handlers.menu import router as menu_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.rating import router as rating_router
@@ -18,4 +19,5 @@ __all__ = [
     "shop_router",
     "profile_router",
     "rating_router",
+    "info_router",
 ]

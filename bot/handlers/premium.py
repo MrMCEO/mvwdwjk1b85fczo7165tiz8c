@@ -54,8 +54,8 @@ def _fmt_status_line(info: dict) -> str:
     if not info["is_active"]:
         return f"Ваш статус: {name}"
 
-    if status == UserStatus.BIO_LEGEND:
-        return f"Ваш статус: {emoji} {name} 👑"
+    if status in (UserStatus.BIO_LEGEND, UserStatus.OWNER):
+        return f"Ваш статус: {emoji} {name} (навсегда)"
 
     until = info["until"]
     until_str = until.strftime("%d.%m.%Y") if until else "∞"
@@ -69,7 +69,7 @@ def _fmt_status_list() -> str:
         emoji = cfg["emoji"]
         name = cfg["name"]
         price = cfg["price"]
-        if s == UserStatus.FREE:
+        if s in (UserStatus.FREE, UserStatus.OWNER):
             continue
         if s == UserStatus.BIO_LEGEND:
             lines.append(f"{emoji} {name} — только через рефералов (50+)")

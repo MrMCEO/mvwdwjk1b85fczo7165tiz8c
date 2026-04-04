@@ -77,9 +77,27 @@ def _fmt_profile(data: dict) -> str:
     if u.get("premium_coins", 0) > 0:
         lines.append(f"💎 PremiumCoins: <b>{u['premium_coins']:,}</b>")
 
-    if premium_active:
+    # Статус и префикс
+    from bot.services.premium import STATUS_CONFIG, UserStatus, _parse_status
+    status = _parse_status(u.get("status"))
+    cfg = STATUS_CONFIG.get(status, {})
+    status_name = f"{cfg.get('emoji', '')} {cfg.get('name', 'Бесплатный')}".strip()
+
+    if status in (UserStatus.BIO_LEGEND, UserStatus.OWNER):
+        lines.append(f"🏅 Статус: <b>{status_name}</b> (навсе��да)")
+    elif premium_active and u.get("premium_until"):
         until_str = u["premium_until"].strftime("%d.%m.%Y")
-        lines.append(f"⭐ Премиум до: <b>{until_str}</b>")
+        lines.append(f"🏅 Статус: <b>{status_name}</b> (до {until_str})")
+    else:
+        lines.append(f"🏅 Статус: <b>{status_name}</b>")
+
+    prefix = u.get("premium_prefix")
+    if prefix:
+        lines.append(f"🏷 Префикс: <b>[{prefix}]</b>")
+
+    display_name = u.get("display_name")
+    if display_name:
+        lines.append(f"✏️ Имя: <b>{display_name}</b>")
 
     lines.append("")
     lines.append(f"⚔️ Активных атак исходящих: <b>{sent}</b>")

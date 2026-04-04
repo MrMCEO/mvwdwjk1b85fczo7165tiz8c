@@ -35,6 +35,7 @@ class UserStatus(enum.Enum):
     BIO_PRO = "BIO_PRO"
     BIO_ELITE = "BIO_ELITE"
     BIO_LEGEND = "BIO_LEGEND"
+    OWNER = "OWNER"
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +66,7 @@ _STATUS_ORDER: list[UserStatus] = [
     UserStatus.BIO_PRO,
     UserStatus.BIO_ELITE,
     UserStatus.BIO_LEGEND,
+    UserStatus.OWNER,
 ]
 
 
@@ -144,6 +146,21 @@ STATUS_CONFIG: dict[UserStatus, dict] = {
         "premium_emoji": True,
         "virus_name_length": 30,
     },
+    UserStatus.OWNER: {
+        "price": 0,  # admin-assigned only, permanent
+        "emoji": "🔴",
+        "name": "Owner",
+        "mining_bonus": 0.25,
+        "daily_bonus": 0.50,
+        "mining_cooldown": 45,
+        "attack_cooldown": 25,
+        "max_attempts_target": 5,
+        "max_infections_hour": 7,
+        "transfer_limit": 999999,
+        "prefix_length": 999,
+        "premium_emoji": True,
+        "virus_name_length": 999,
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -212,9 +229,9 @@ async def get_user_status(session: AsyncSession, user_id: int) -> UserStatus:
 
     stored = _parse_status(getattr(user, "status", None))
 
-    # Legend is unconditional (no expiry logic)
-    if stored == UserStatus.BIO_LEGEND:
-        return UserStatus.BIO_LEGEND
+    # Legend and Owner are permanent (no expiry logic)
+    if stored in (UserStatus.BIO_LEGEND, UserStatus.OWNER):
+        return stored
 
     # For all paid statuses: check premium_until
     if stored != UserStatus.FREE:
@@ -274,7 +291,7 @@ async def buy_status(
 
     Returns (success, message).
     """
-    if target in (UserStatus.FREE, UserStatus.BIO_LEGEND):
+    if target in (UserStatus.FREE, UserStatus.BIO_LEGEND, UserStatus.OWNER):
         return False, "Этот статус нельзя купить напрямую."
 
     result = await session.execute(
@@ -356,8 +373,8 @@ async def get_premium_info(session: AsyncSession, user_id: int) -> dict:
             "days_left": 0,
         }
 
-    # Legend has no expiry
-    if status == UserStatus.BIO_LEGEND:
+    # Legend and Owner have no expiry
+    if status in (UserStatus.BIO_LEGEND, UserStatus.OWNER):
         return {
             "is_active": True,
             "status": status,

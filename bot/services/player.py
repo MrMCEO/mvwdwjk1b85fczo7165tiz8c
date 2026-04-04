@@ -267,6 +267,7 @@ async def get_player_profile(session: AsyncSession, user_id: int) -> dict:
             "last_active": user.last_active,
             "premium_until": user.premium_until,
             "premium_prefix": user.premium_prefix,
+            "status": getattr(user, "status", "FREE"),
         },
         "virus": virus_data,
         "immunity": immunity_data,

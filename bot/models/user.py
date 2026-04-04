@@ -36,8 +36,14 @@ class User(Base):
         DateTime, nullable=True, default=None
     )
     premium_prefix: Mapped[str | None] = mapped_column(
-        String(10), nullable=True, default=None
-    )  # До 5 символов (String(10) — запас на multi-byte)
+        String(30), nullable=True, default=None
+    )  # До 5 видимых символов; String(30) — запас для HTML-escape (&amp; и т.д.)
+    status: Mapped[str] = mapped_column(
+        String(20), default="FREE", server_default="FREE"
+    )  # UserStatus enum value, e.g. "FREE", "BIO_PLUS", …, "BIO_LEGEND"
+    display_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True, default=None
+    )  # Кастомное отображаемое имя (до 20 символов видимых; String(120) — запас для HTML-escape)
 
     # Relationships
     virus: Mapped["Virus"] = relationship(

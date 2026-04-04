@@ -23,6 +23,10 @@ class TransactionReason(enum.Enum):
     UPGRADE = "UPGRADE"
     DONATION = "DONATION"
     DAILY_BONUS = "DAILY_BONUS"
+    TRANSFER_OUT = "TRANSFER_OUT"          # Отправка монет другому игроку
+    TRANSFER_IN = "TRANSFER_IN"            # Получение монет от другого игрока
+    ALLIANCE_DONATION = "ALLIANCE_DONATION"  # Пожертвование в казну альянса
+    REFERRAL_REWARD = "REFERRAL_REWARD"     # Награда реферальной программы
 
 
 class ResourceTransaction(Base):

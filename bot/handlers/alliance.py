@@ -6,6 +6,7 @@ FSM flows:
   - AllianceInviteStates: waiting_for_username
   - AllianceSearchStates: waiting_for_query
   - AllianceBuyCoinsStates: waiting_for_amount
+  - AllianceDonateStates: waiting_for_amount
 """
 
 from __future__ import annotations
@@ -25,30 +26,48 @@ from bot.keyboards.alliance import (
     alliance_info_kb,
     alliance_members_kb,
     alliance_no_clan_kb,
+    alliance_privacy_kb,
+    alliance_requests_kb,
     alliance_search_kb,
     alliance_upgrades_kb,
 )
 from bot.keyboards.common import back_button, confirm_cancel_kb
-from bot.models.alliance import ROLE_LABELS, Alliance, AllianceMember, AllianceRole
+from bot.models.alliance import (
+    PRIVACY_LABELS,
+    ROLE_LABELS,
+    Alliance,
+    AllianceMember,
+    AlliancePrivacy,
+    AllianceRole,
+)
 from bot.services.alliance import (
     ALLIANCE_CREATE_COST,
     ALLIANCE_UPGRADE_CONFIG,
+    BIO_TO_ALLIANCE_RATE,
     MAX_MEMBERS_DEFAULT,
+    TREASURY_MIN_DONATION,
     buy_alliance_coins,
+    convert_treasury,
     create_alliance,
     demote_member,
     dissolve_alliance,
+    donate_to_treasury,
     get_alliance_info,
     get_alliance_max_members,
     get_alliance_members,
     get_alliance_upgrades,
+    get_pending_requests,
+    handle_request,
     invite_player,
     kick_member,
     leave_alliance,
     promote_member,
+    request_join,
     search_alliances,
+    set_privacy,
     upgrade_alliance,
 )
+from bot.services.resource import get_balance
 
 router = Router(name="alliance")
 
@@ -76,6 +95,10 @@ class AllianceBuyCoinsStates(StatesGroup):
     waiting_for_amount = State()
 
 
+class AllianceDonateStates(StatesGroup):
+    waiting_for_amount = State()
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -87,13 +110,18 @@ def _fmt_alliance_info(info: dict) -> str:
     role_label = ROLE_LABELS.get(info["user_role"], "")
     created = info["created_at"].strftime("%d.%m.%Y") if info["created_at"] else "—"
     coins = info.get("alliance_coins", 0)
+    treasury_bio = info.get("treasury_bio", 0)
+    privacy = info.get("privacy", AlliancePrivacy.REQUEST)
+    privacy_label = PRIVACY_LABELS.get(privacy, "📩 По запросу")
 
     return (
         f"🏰 <b>[{escape(info['tag'])}] {escape(info['name'])}</b>\n\n"
         f"👑 Лидер: <b>{info['leader_username']}</b>\n"
         f"👥 Участников: <b>{info['member_count']}/{info['max_members']}</b>\n"
         f"🛡 Бонус защиты: <b>+{bonus_pct}%</b>\n"
-        f"🔷 Казна: <b>{coins} AllianceCoins</b>\n"
+        f"🔷 AllianceCoins: <b>{coins}</b>\n"
+        f"🧫 Казна (bio): <b>{treasury_bio}</b>\n"
+        f"{privacy_label}\n"
         f"📅 Создан: <b>{created}</b>\n\n"
         f"Твоя роль: <b>{role_label}</b>"
         + (f"\n\n📝 {escape(info['description'])}" if info.get("description") else "")
@@ -123,10 +151,14 @@ async def cb_alliance_menu(
             parse_mode="HTML",
         )
     else:
+        pending = 0
+        if info["user_role"] in (AllianceRole.LEADER, AllianceRole.OFFICER):
+            reqs = await get_pending_requests(session, info["id"])
+            pending = len(reqs)
         text = _fmt_alliance_info(info)
         await callback.message.edit_text(
             text,
-            reply_markup=alliance_info_kb(info["user_role"]),
+            reply_markup=alliance_info_kb(info["user_role"], pending_requests=pending),
             parse_mode="HTML",
         )
 
@@ -644,7 +676,7 @@ async def msg_search_query(
 async def cb_alliance_join(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
-    """Join an alliance by adding the caller as a MEMBER directly (open join)."""
+    """Join an OPEN alliance directly (no approval required)."""
     try:
         alliance_id = int(callback.data[len("alliance_join_"):])
     except ValueError:
@@ -670,6 +702,21 @@ async def cb_alliance_join(
     alliance = alliance_result.scalar_one_or_none()
     if alliance is None:
         await callback.answer("❌ Альянс не найден.", show_alert=True)
+        return
+
+    # Enforce privacy: only OPEN allows direct join
+    privacy_str = alliance.privacy if isinstance(alliance.privacy, str) else alliance.privacy.value
+    if privacy_str == AlliancePrivacy.CLOSED.value:
+        await callback.answer(
+            "❌ Этот альянс закрытый — вступить можно только по приглашению.",
+            show_alert=True,
+        )
+        return
+    if privacy_str == AlliancePrivacy.REQUEST.value:
+        await callback.answer(
+            "❌ Этот альянс работает по заявкам. Нажми кнопку заявки.",
+            show_alert=True,
+        )
         return
 
     # Check capacity (re-count under lock)
@@ -854,3 +901,302 @@ async def msg_buy_coins_amount(
         )
     else:
         await message.answer(msg, parse_mode="HTML")
+
+
+# ---------------------------------------------------------------------------
+# Treasury — Donate bio to alliance
+# ---------------------------------------------------------------------------
+
+
+@router.callback_query(lambda c: c.data == "alliance_donate")
+async def cb_alliance_donate(
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+) -> None:
+    """Start FSM: ask how many bio_coins to donate to treasury."""
+    info = await get_alliance_info(session, callback.from_user.id)
+    if info is None:
+        await callback.answer("❌ Ты не в альянсе.", show_alert=True)
+        return
+
+    balance = await get_balance(session, callback.from_user.id)
+    bio = balance.get("bio_coins", 0) if balance else 0
+
+    await state.set_state(AllianceDonateStates.waiting_for_amount)
+    await callback.message.edit_text(
+        "💰 <b>Пожертвование в казну альянса</b>\n\n"
+        f"Курс конвертации: <b>{BIO_TO_ALLIANCE_RATE} 🧫 = 1 🔷</b>\n"
+        f"Минимальный взнос: <b>{TREASURY_MIN_DONATION} 🧫</b>\n\n"
+        f"Твой баланс: <b>{bio} 🧫</b>\n"
+        f"Казна альянса: <b>{info['treasury_bio']} 🧫</b>\n\n"
+        "Введи сумму пожертвования (🧫 BioCoins):\n\n"
+        "Или нажми «Назад» для отмены.",
+        reply_markup=back_button("alliance_menu"),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(AllianceDonateStates.waiting_for_amount)
+async def msg_donate_amount(
+    message: Message, state: FSMContext, session: AsyncSession
+) -> None:
+    """Process donation amount."""
+    raw = (message.text or "").strip()
+    await state.clear()
+
+    try:
+        amount = int(raw)
+    except ValueError:
+        await message.answer(
+            "❌ Введи целое число. Попробуй ещё раз.",
+            reply_markup=back_button("alliance_menu"),
+        )
+        return
+
+    success, msg = await donate_to_treasury(session, message.from_user.id, amount)
+    info = await get_alliance_info(session, message.from_user.id)
+    role = info["user_role"] if info else AllianceRole.MEMBER
+
+    # Count pending requests for badge
+    pending = 0
+    if info and role in (AllianceRole.LEADER, AllianceRole.OFFICER):
+        reqs = await get_pending_requests(session, info["id"])
+        pending = len(reqs)
+
+    await message.answer(
+        msg,
+        reply_markup=alliance_info_kb(role, pending_requests=pending),
+        parse_mode="HTML",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Treasury — Convert treasury (leader/officer)
+# ---------------------------------------------------------------------------
+
+
+@router.callback_query(lambda c: c.data == "alliance_convert_treasury")
+async def cb_alliance_convert_treasury(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Convert accumulated treasury_bio into alliance_coins."""
+    success, msg = await convert_treasury(session, callback.from_user.id)
+
+    if success:
+        info = await get_alliance_info(session, callback.from_user.id)
+        role = info["user_role"] if info else AllianceRole.MEMBER
+        pending = 0
+        if info and role in (AllianceRole.LEADER, AllianceRole.OFFICER):
+            reqs = await get_pending_requests(session, info["id"])
+            pending = len(reqs)
+        text = msg + "\n\n" + _fmt_alliance_info(info)
+        await callback.message.edit_text(
+            text,
+            reply_markup=alliance_info_kb(role, pending_requests=pending),
+            parse_mode="HTML",
+        )
+    else:
+        await callback.answer(msg, show_alert=True)
+
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# Privacy — set alliance privacy mode (leader only)
+# ---------------------------------------------------------------------------
+
+
+@router.callback_query(lambda c: c.data == "alliance_privacy")
+async def cb_alliance_privacy(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Show privacy selection keyboard."""
+    info = await get_alliance_info(session, callback.from_user.id)
+    if info is None:
+        await callback.answer("❌ Ты не в альянсе.", show_alert=True)
+        return
+
+    if info["user_role"] != AllianceRole.LEADER:
+        await callback.answer("❌ Только лидер может менять приватность.", show_alert=True)
+        return
+
+    current_privacy = info.get("privacy", AlliancePrivacy.REQUEST)
+    await callback.message.edit_text(
+        f"⚙️ <b>Приватность альянса [{escape(info['tag'])}] {escape(info['name'])}</b>\n\n"
+        "🔒 <b>Закрытый</b> — вступить можно только по приглашению лидера/офицера.\n"
+        "📩 <b>По запросу</b> — игроки подают заявку, офицеры принимают/отклоняют.\n"
+        "🔓 <b>Открытый</b> — любой может вступить без одобрения.\n\n"
+        "Текущий режим выделен ✅:",
+        reply_markup=alliance_privacy_kb(current_privacy),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("alliance_set_privacy_"))
+async def cb_set_privacy(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Apply selected privacy mode."""
+    mode_str = callback.data[len("alliance_set_privacy_"):]
+    try:
+        privacy = AlliancePrivacy(mode_str)
+    except ValueError:
+        await callback.answer("❌ Неизвестный режим.", show_alert=True)
+        return
+
+    success, msg = await set_privacy(session, callback.from_user.id, privacy)
+
+    if success:
+        info = await get_alliance_info(session, callback.from_user.id)
+        if info:
+            current_privacy = info.get("privacy", AlliancePrivacy.REQUEST)
+            await callback.message.edit_text(
+                f"⚙️ <b>Приватность альянса [{escape(info['tag'])}] {escape(info['name'])}</b>\n\n"
+                "🔒 <b>Закрытый</b> — вступить можно только по приглашению лидера/офицера.\n"
+                "📩 <b>По запросу</b> — игроки подают заявку, офицеры принимают/отклоняют.\n"
+                "🔓 <b>Открытый</b> — любой может вступить без одобрения.\n\n"
+                f"{msg}\n\nТекущий режим выделен ✅:",
+                reply_markup=alliance_privacy_kb(current_privacy),
+                parse_mode="HTML",
+            )
+    else:
+        await callback.answer(msg, show_alert=True)
+
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# Privacy — REQUEST mode: join requests flow
+# ---------------------------------------------------------------------------
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("alliance_request_"))
+async def cb_alliance_request_join(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Submit a join request for a REQUEST-mode alliance."""
+    try:
+        alliance_id = int(callback.data[len("alliance_request_"):])
+    except ValueError:
+        await callback.answer("❌ Неверный ID альянса.", show_alert=True)
+        return
+
+    success, msg = await request_join(session, callback.from_user.id, alliance_id)
+
+    if success:
+        # Notification will be sent by main.py bot instance — pass bot via DI
+        # For now just show the user the result
+        await callback.message.edit_text(
+            msg,
+            reply_markup=alliance_no_clan_kb(),
+            parse_mode="HTML",
+        )
+    else:
+        await callback.answer(msg, show_alert=True)
+
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "alliance_requests")
+async def cb_alliance_requests(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Show pending join requests list for the alliance."""
+    info = await get_alliance_info(session, callback.from_user.id)
+    if info is None:
+        await callback.answer("❌ Ты не в альянсе.", show_alert=True)
+        return
+
+    if info["user_role"] not in (AllianceRole.LEADER, AllianceRole.OFFICER):
+        await callback.answer("❌ Только лидер или офицер могут смотреть заявки.", show_alert=True)
+        return
+
+    requests = await get_pending_requests(session, info["id"])
+    text = (
+        f"📩 <b>Заявки на вступление в [{escape(info['tag'])}] {escape(info['name'])}</b>\n\n"
+        f"Активных заявок: <b>{len(requests)}</b>"
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=alliance_requests_kb(requests),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("alliance_req_info_"))
+async def cb_req_info_noop(callback: CallbackQuery) -> None:
+    """Noop — request username button is a label."""
+    await callback.answer("Нажми ✅ Принять или ❌ Отклонить рядом с заявкой.")
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("alliance_req_accept_"))
+async def cb_req_accept(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Accept a join request."""
+    try:
+        request_id = int(callback.data[len("alliance_req_accept_"):])
+    except ValueError:
+        await callback.answer("❌ Неверный ID заявки.", show_alert=True)
+        return
+
+    success, msg = await handle_request(session, callback.from_user.id, request_id, accept=True)
+
+    if success:
+        info = await get_alliance_info(session, callback.from_user.id)
+        if info:
+            requests = await get_pending_requests(session, info["id"])
+            text = (
+                f"📩 <b>Заявки на вступление в [{escape(info['tag'])}] {escape(info['name'])}</b>\n\n"
+                f"{msg}\n\nАктивных заявок: <b>{len(requests)}</b>"
+            )
+            await callback.message.edit_text(
+                text,
+                reply_markup=alliance_requests_kb(requests),
+                parse_mode="HTML",
+            )
+    else:
+        await callback.answer(msg, show_alert=True)
+
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("alliance_req_decline_"))
+async def cb_req_decline(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Decline a join request."""
+    try:
+        request_id = int(callback.data[len("alliance_req_decline_"):])
+    except ValueError:
+        await callback.answer("❌ Неверный ID заявки.", show_alert=True)
+        return
+
+    success, msg = await handle_request(session, callback.from_user.id, request_id, accept=False)
+
+    if success:
+        info = await get_alliance_info(session, callback.from_user.id)
+        if info:
+            requests = await get_pending_requests(session, info["id"])
+            text = (
+                f"📩 <b>Заявки на вступление в [{escape(info['tag'])}] {escape(info['name'])}</b>\n\n"
+                f"{msg}\n\nАктивных заявок: <b>{len(requests)}</b>"
+            )
+            await callback.message.edit_text(
+                text,
+                reply_markup=alliance_requests_kb(requests),
+                parse_mode="HTML",
+            )
+    else:
+        await callback.answer(msg, show_alert=True)
+
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# Join alliance — updated: respects privacy (OPEN = direct join, REQUEST = request)
+# The existing cb_alliance_join handles OPEN mode (direct join).
+# alliance_request_ prefix handles REQUEST mode (join request).
+# ---------------------------------------------------------------------------

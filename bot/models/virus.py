@@ -25,7 +25,7 @@ class Virus(Base):
     )
     name: Mapped[str] = mapped_column(String(64), default="Неизвестный вирус", server_default="Неизвестный вирус")
     name_entities_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    level: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     attack_power: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
     spread_rate: Mapped[float] = mapped_column(Float, default=1.0, server_default="1.0")  # balanced: was 0.1, see combat.py formula
     mutation_points: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

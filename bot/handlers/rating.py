@@ -39,10 +39,15 @@ def _is_premium_active(premium_until: datetime | None) -> bool:
 
 
 def _fmt_row_username(row: dict) -> str:
-    """Build a display name for a rating row using prefix if available."""
+    """Build a display name for a rating row using display_name/prefix if available."""
     base = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
     active = _is_premium_active(row.get("premium_until"))
-    return format_username(base, row.get("premium_prefix"), active)
+    return format_username(
+        base,
+        row.get("premium_prefix"),
+        active,
+        display_name=row.get("display_name"),
+    )
 
 
 # ---------------------------------------------------------------------------

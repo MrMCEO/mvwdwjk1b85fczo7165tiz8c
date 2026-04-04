@@ -32,9 +32,9 @@ DEFAULT_VIRUS_NAME = "Неизвестный вирус"
 DEFAULT_ATTACK_POWER = 10
 DEFAULT_SPREAD_RATE = 1.0   # balanced: was 0.1, made attack_score=1 vs defense=10 (9% chance). Now 10 vs ~10.5 (~48%)
 DEFAULT_MUTATION_POINTS = 0
-DEFAULT_VIRUS_LEVEL = 1
+DEFAULT_VIRUS_LEVEL = 0
 
-DEFAULT_IMMUNITY_LEVEL = 1
+DEFAULT_IMMUNITY_LEVEL = 0
 DEFAULT_RESISTANCE = 10
 DEFAULT_DETECTION_POWER = 0.1   # contributes 0.1*5=0.5 to defense_score at lvl0; grows with DETECTION upgrades
 DEFAULT_RECOVERY_SPEED = 0.03   # balanced: was 0.1 (15% auto-cure with base 5%). Now 8% base auto-cure, ~12 ticks avg duration
@@ -260,6 +260,7 @@ async def get_player_profile(session: AsyncSession, user_id: int) -> dict:
         "user": {
             "tg_id": user.tg_id,
             "username": user.username,
+            "display_name": user.display_name,
             "bio_coins": user.bio_coins,
             "premium_coins": user.premium_coins,
             "created_at": user.created_at,

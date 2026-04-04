@@ -11,10 +11,12 @@ from bot.handlers.mutations import router as mutations_router
 from bot.handlers.premium import router as premium_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.rating import router as rating_router
+from bot.handlers.referral import router as referral_router
 from bot.handlers.resources import router as resources_router
 from bot.handlers.shop import router as shop_router
 from bot.handlers.start import router as start_router
 from bot.handlers.text_commands import router as text_commands_router
+from bot.handlers.transfer import router as transfer_router
 from bot.handlers.virus import router as virus_router
 
 __all__ = [
@@ -35,5 +37,7 @@ __all__ = [
     "events_router",
     "laboratory_router",
     "market_router",
+    "referral_router",
+    "transfer_router",
     "text_commands_router",
 ]

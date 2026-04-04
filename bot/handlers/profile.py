@@ -1,5 +1,5 @@
 """
-Profile handlers — player profile view, attack log, and transaction log.
+Profile handlers — player profile view, attack log, transaction log, display name.
 """
 
 from __future__ import annotations
@@ -7,13 +7,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from aiogram import Router
-from aiogram.types import CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.profile import log_pagination_kb, profile_kb
 from bot.services.activity import get_attack_log, get_transaction_log
 from bot.services.player import get_player_profile
-from bot.services.premium import format_username
+from bot.services.premium import clear_display_name, format_username, set_display_name
 from bot.utils.emoji import render_virus_name
 
 
@@ -23,6 +25,11 @@ def _is_premium_active(premium_until: datetime | None) -> bool:
         return False
     now = datetime.now(UTC).replace(tzinfo=None)
     return premium_until > now
+
+
+class DisplayNameStates(StatesGroup):
+    waiting_for_name = State()
+
 
 router = Router(name="profile")
 
@@ -46,7 +53,12 @@ def _fmt_profile(data: dict) -> str:
 
     premium_active = _is_premium_active(u.get("premium_until"))
     base_username = f"@{u['username']}" if u.get("username") else f"id{u['tg_id']}"
-    username_display = format_username(base_username, u.get("premium_prefix"), premium_active)
+    username_display = format_username(
+        base_username,
+        u.get("premium_prefix"),
+        premium_active,
+        display_name=u.get("display_name"),
+    )
 
     virus_name = render_virus_name(v.get("name", "—"), v.get("name_entities_json"))
     virus_level = v.get("level", "—")
@@ -204,3 +216,54 @@ async def cb_transaction_log(callback: CallbackQuery, session: AsyncSession) -> 
         parse_mode="HTML",
     )
     await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# Display name — установка и сброс
+# ---------------------------------------------------------------------------
+
+
+@router.callback_query(lambda c: c.data == "set_display_name")
+async def cb_set_display_name(
+    callback: CallbackQuery, state: FSMContext
+) -> None:
+    """Запросить у пользователя новое отображаемое имя."""
+    await state.set_state(DisplayNameStates.waiting_for_name)
+    await callback.message.edit_text(
+        "✏️ <b>Изменить отображаемое имя</b>\n\n"
+        "Введи новое имя (до 20 символов).\n"
+        "Оно будет показываться вместо твоего @username везде в игре.\n\n"
+        "Отправь <code>/cancel</code> для отмены.",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(DisplayNameStates.waiting_for_name)
+async def msg_display_name_input(
+    message: Message, state: FSMContext, session: AsyncSession
+) -> None:
+    """Обработать ввод нового отображаемого имени."""
+    text = (message.text or "").strip()
+
+    # Отмена
+    if text.lower() in ("/cancel", "отмена"):
+        await state.clear()
+        await message.answer(
+            "❌ Изменение имени отменено.",
+            parse_mode="HTML",
+        )
+        return
+
+    ok, msg = await set_display_name(session, message.from_user.id, text)
+    await state.clear()
+    await message.answer(msg, parse_mode="HTML")
+
+
+@router.callback_query(lambda c: c.data == "clear_display_name")
+async def cb_clear_display_name(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Сбросить кастомное отображаемое имя на @username."""
+    ok, msg = await clear_display_name(session, callback.from_user.id)
+    await callback.answer(msg, show_alert=True)

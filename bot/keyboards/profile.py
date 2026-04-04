@@ -5,12 +5,14 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
 def profile_kb() -> InlineKeyboardMarkup:
-    """Profile view — links to activity logs and back button."""
+    """Profile view — links to activity logs, display name, and back button."""
     builder = InlineKeyboardBuilder()
     builder.button(text="📋 Лог атак", callback_data="attack_log:0")
     builder.button(text="💰 Лог транзакций", callback_data="transaction_log:0")
+    builder.button(text="✏️ Изменить имя", callback_data="set_display_name")
+    builder.button(text="🔄 Сбросить имя", callback_data="clear_display_name")
     builder.button(text="◀️ Назад", callback_data="main_menu")
-    builder.adjust(2, 1)
+    builder.adjust(2, 2, 1)
     return builder.as_markup()
 
 

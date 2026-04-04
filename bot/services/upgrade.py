@@ -25,6 +25,7 @@ from bot.models.resource import (
 )
 from bot.models.user import User
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
+from bot.services.referral import check_qualification, update_referral_activity
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -218,6 +219,16 @@ async def upgrade_virus_branch(
     session.add(tx)
     await session.flush()
 
+    # Пересчитать уровень вируса = сумма уровней всех веток
+    all_upgrades = await session.execute(
+        select(VirusUpgrade).where(VirusUpgrade.virus_id == virus.id)
+    )
+    virus.level = sum(u.level for u in all_upgrades.scalars().all())
+
+    # Реферальная программа: обновить активность и проверить квалификацию
+    await update_referral_activity(session, user_id)
+    await check_qualification(session, user_id)
+
     branch_name = _VIRUS_BRANCH_NAMES[branch_key]
     new_level = upgrade.level
     next_cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], new_level)
@@ -295,6 +306,16 @@ async def upgrade_immunity_branch(
     )
     session.add(tx)
     await session.flush()
+
+    # Пересчитать уровень иммунитета = сумма уровней всех веток
+    all_imm_upgrades = await session.execute(
+        select(ImmunityUpgrade).where(ImmunityUpgrade.immunity_id == immunity.id)
+    )
+    immunity.level = sum(u.level for u in all_imm_upgrades.scalars().all())
+
+    # Реферальная программа: обновить активность и проверить квалификацию
+    await update_referral_activity(session, user_id)
+    await check_qualification(session, user_id)
 
     branch_name = _IMMUNITY_BRANCH_NAMES[branch_key]
     new_level = upgrade.level

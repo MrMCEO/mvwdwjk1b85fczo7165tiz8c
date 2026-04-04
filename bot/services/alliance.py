@@ -15,7 +15,17 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from bot.models.alliance import ROLE_LABELS, Alliance, AllianceMember, AllianceRole
+from bot.models.alliance import (
+    PRIVACY_LABELS,
+    ROLE_LABELS,
+    Alliance,
+    AllianceJoinRequest,
+    AllianceMember,
+    AlliancePrivacy,
+    AllianceRole,
+    JoinRequestStatus,
+)
+from bot.models.resource import Currency, ResourceTransaction, TransactionReason
 from bot.models.user import User
 
 # ---------------------------------------------------------------------------
@@ -88,6 +98,10 @@ ALLIANCE_UPGRADE_CONFIG: dict[str, dict] = {
 }
 
 ALLIANCE_COIN_RATE = 1  # 1 💎 = 1 🔷
+
+# Treasury: bio_coins → alliance_coins conversion
+BIO_TO_ALLIANCE_RATE = 100  # 100 🧫 = 1 🔷
+TREASURY_MIN_DONATION = 100  # минимальный взнос
 
 
 # ---------------------------------------------------------------------------
@@ -519,6 +533,12 @@ async def get_alliance_info(session: AsyncSession, user_id: int) -> dict | None:
     max_members = await get_alliance_max_members(session, alliance.id)
     defense_bonus = alliance.shield_level * ALLIANCE_UPGRADE_CONFIG["shield"]["effect_per_level"]
 
+    privacy_val = alliance.privacy if isinstance(alliance.privacy, str) else alliance.privacy.value
+    try:
+        privacy_enum = AlliancePrivacy(privacy_val)
+    except ValueError:
+        privacy_enum = AlliancePrivacy.REQUEST
+
     return {
         "id": alliance.id,
         "name": alliance.name,
@@ -532,6 +552,8 @@ async def get_alliance_info(session: AsyncSession, user_id: int) -> dict | None:
         "created_at": alliance.created_at,
         "user_role": member.role,
         "alliance_coins": alliance.alliance_coins,
+        "treasury_bio": alliance.treasury_bio,
+        "privacy": privacy_enum,
     }
 
 
@@ -583,6 +605,8 @@ async def search_alliances(
     Each dict: id, name, tag, description, member_count, max_members, defense_bonus.
     """
     stmt = select(Alliance)
+    # Exclude CLOSED alliances at the DB level (before LIMIT is applied)
+    stmt = stmt.where(Alliance.privacy != AlliancePrivacy.CLOSED.value)
     if query:
         q = query.strip()
         stmt = stmt.where(
@@ -604,6 +628,11 @@ async def search_alliances(
         count: int = count_result.scalar_one()
         max_members = 20 + a.capacity_level * 5
         defense_bonus = a.shield_level * ALLIANCE_UPGRADE_CONFIG["shield"]["effect_per_level"]
+        privacy_str = a.privacy if isinstance(a.privacy, str) else a.privacy.value
+        try:
+            privacy_enum = AlliancePrivacy(privacy_str)
+        except ValueError:
+            privacy_enum = AlliancePrivacy.REQUEST
         out.append(
             {
                 "id": a.id,
@@ -613,6 +642,7 @@ async def search_alliances(
                 "member_count": count,
                 "max_members": max_members,
                 "defense_bonus": defense_bonus,
+                "privacy": privacy_enum,
             }
         )
 
@@ -876,3 +906,318 @@ async def get_alliance_upgrades(session: AsyncSession, alliance_id: int) -> dict
         }
 
     return out
+
+
+# ---------------------------------------------------------------------------
+# Public API — Treasury (Казна альянса)
+# ---------------------------------------------------------------------------
+
+
+async def donate_to_treasury(
+    session: AsyncSession, user_id: int, bio_amount: int
+) -> tuple[bool, str]:
+    """
+    Участник жертвует bio_coins в казну альянса.
+
+    Пожертвования накапливаются в treasury_bio (не конвертируются сразу).
+    Минимальный взнос — TREASURY_MIN_DONATION (100 🧫).
+    Создаёт ResourceTransaction для аудит-трейла.
+    """
+    if bio_amount < TREASURY_MIN_DONATION:
+        return False, (
+            f"❌ Минимальное пожертвование: {TREASURY_MIN_DONATION} 🧫 BioCoins "
+            f"(= 1 🔷 AllianceCoin)."
+        )
+
+    alliance, member = await _get_alliance_for_user(session, user_id)
+    if alliance is None:
+        return False, "❌ Ты не состоишь ни в одном альянсе."
+
+    # Lock user row
+    user_result = await session.execute(
+        select(User).where(User.tg_id == user_id).with_for_update()
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        return False, "❌ Пользователь не найден."
+
+    if user.bio_coins < bio_amount:
+        return False, (
+            f"❌ Недостаточно 🧫 BioCoins.\n"
+            f"Нужно: {bio_amount} 🧫, у тебя: {user.bio_coins} 🧫"
+        )
+
+    # Lock alliance row
+    alliance_result = await session.execute(
+        select(Alliance).where(Alliance.id == alliance.id).with_for_update()
+    )
+    alliance = alliance_result.scalar_one_or_none()
+
+    user.bio_coins -= bio_amount
+    alliance.treasury_bio += bio_amount
+
+    # Audit transaction
+    tx = ResourceTransaction(
+        user_id=user_id,
+        amount=-bio_amount,
+        currency=Currency.BIO_COINS,
+        reason=TransactionReason.ALLIANCE_DONATION,
+    )
+    session.add(tx)
+    await session.flush()
+
+    pending_coins = alliance.treasury_bio // BIO_TO_ALLIANCE_RATE
+    return True, (
+        f"✅ Пожертвовано <b>{bio_amount} 🧫 BioCoins</b> в казну альянса!\n"
+        f"Казна: <b>{alliance.treasury_bio} 🧫</b> (≈ {pending_coins} 🔷 при конвертации)\n\n"
+        f"Твой баланс: <b>{user.bio_coins} 🧫</b>"
+    )
+
+
+async def convert_treasury(
+    session: AsyncSession, user_id: int
+) -> tuple[bool, str]:
+    """
+    Лидер или офицер конвертирует накопленные bio из казны в alliance_coins.
+
+    Курс: BIO_TO_ALLIANCE_RATE 🧫 = 1 🔷.
+    Остаток < 100 остаётся в казне.
+    """
+    alliance, member = await _get_alliance_for_user(session, user_id)
+    if alliance is None:
+        return False, "❌ Ты не состоишь ни в одном альянсе."
+
+    if member.role not in (AllianceRole.LEADER, AllianceRole.OFFICER):
+        return False, "❌ Только лидер или офицер могут конвертировать казну."
+
+    # Lock alliance row
+    alliance_result = await session.execute(
+        select(Alliance).where(Alliance.id == alliance.id).with_for_update()
+    )
+    alliance = alliance_result.scalar_one_or_none()
+
+    if alliance.treasury_bio < BIO_TO_ALLIANCE_RATE:
+        return False, (
+            f"❌ Недостаточно 🧫 в казне для конвертации.\n"
+            f"Текущий запас: {alliance.treasury_bio} 🧫\n"
+            f"Минимум для конвертации: {BIO_TO_ALLIANCE_RATE} 🧫 = 1 🔷"
+        )
+
+    coins_gained = alliance.treasury_bio // BIO_TO_ALLIANCE_RATE
+    remainder = alliance.treasury_bio % BIO_TO_ALLIANCE_RATE
+
+    alliance.treasury_bio = remainder
+    alliance.alliance_coins += coins_gained
+    await session.flush()
+
+    return True, (
+        f"✅ Конвертация казны завершена!\n"
+        f"Получено: <b>+{coins_gained} 🔷 AllianceCoins</b>\n"
+        f"Остаток в казне: <b>{remainder} 🧫</b>\n"
+        f"Баланс альянса: <b>{alliance.alliance_coins} 🔷</b>"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public API — Privacy (Приватность альянса)
+# ---------------------------------------------------------------------------
+
+
+async def set_privacy(
+    session: AsyncSession, user_id: int, privacy: AlliancePrivacy
+) -> tuple[bool, str]:
+    """Установить режим приватности альянса. Только лидер."""
+    alliance, member = await _get_alliance_for_user(session, user_id)
+    if alliance is None:
+        return False, "❌ Ты не состоишь ни в одном альянсе."
+
+    if member.role != AllianceRole.LEADER:
+        return False, "❌ Только лидер может менять приватность альянса."
+
+    alliance_result = await session.execute(
+        select(Alliance).where(Alliance.id == alliance.id).with_for_update()
+    )
+    alliance = alliance_result.scalar_one_or_none()
+    alliance.privacy = privacy.value
+    await session.flush()
+
+    label = PRIVACY_LABELS[privacy]
+    return True, f"✅ Режим альянса изменён: <b>{label}</b>"
+
+
+async def request_join(
+    session: AsyncSession, user_id: int, alliance_id: int
+) -> tuple[bool, str]:
+    """
+    Подать заявку на вступление в альянс (режим REQUEST).
+
+    Возвращает (True, msg) если заявка создана.
+    Возвращает список user_id офицеров/лидера для уведомлений через extra dict.
+    """
+    # Check not already in alliance (lock to guard against race conditions)
+    existing_member_result = await session.execute(
+        select(AllianceMember)
+        .where(AllianceMember.user_id == user_id)
+        .with_for_update()
+    )
+    if existing_member_result.scalar_one_or_none() is not None:
+        return False, "❌ Ты уже состоишь в альянсе."
+
+    # Load alliance with lock to prevent concurrent capacity race
+    alliance_result = await session.execute(
+        select(Alliance).where(Alliance.id == alliance_id).with_for_update()
+    )
+    alliance = alliance_result.scalar_one_or_none()
+    if alliance is None:
+        return False, "❌ Альянс не найден."
+
+    privacy_str = alliance.privacy if isinstance(alliance.privacy, str) else alliance.privacy.value
+    if privacy_str == AlliancePrivacy.CLOSED.value:
+        return False, "❌ Этот альянс закрытый — вступить можно только по приглашению."
+
+    if privacy_str == AlliancePrivacy.OPEN.value:
+        return False, "❌ Этот альянс открытый — нажми «Вступить» напрямую."
+
+    # Check capacity
+    count_result = await session.execute(
+        select(func.count(AllianceMember.id)).where(AllianceMember.alliance_id == alliance_id)
+    )
+    count: int = count_result.scalar_one()
+    max_members = await get_alliance_max_members(session, alliance_id)
+    if count >= max_members:
+        return False, f"❌ Альянс заполнен ({count}/{max_members})."
+
+    # Check no duplicate pending request
+    existing_req_result = await session.execute(
+        select(AllianceJoinRequest).where(
+            AllianceJoinRequest.alliance_id == alliance_id,
+            AllianceJoinRequest.user_id == user_id,
+            AllianceJoinRequest.status == JoinRequestStatus.PENDING,
+        )
+    )
+    if existing_req_result.scalar_one_or_none() is not None:
+        return False, "❌ Ты уже подал заявку в этот альянс. Ожидай решения."
+
+    req = AllianceJoinRequest(
+        alliance_id=alliance_id,
+        user_id=user_id,
+        status=JoinRequestStatus.PENDING,
+    )
+    session.add(req)
+    await session.flush()
+
+    return True, (
+        f"✅ Заявка на вступление в <b>[{alliance.tag}] {alliance.name}</b> отправлена!\n"
+        "Ожидай решения лидера или офицера."
+    )
+
+
+async def get_pending_requests(
+    session: AsyncSession, alliance_id: int
+) -> list[dict]:
+    """Вернуть список активных (PENDING) заявок на вступление."""
+    result = await session.execute(
+        select(AllianceJoinRequest, User)
+        .join(User, AllianceJoinRequest.user_id == User.tg_id)
+        .where(
+            AllianceJoinRequest.alliance_id == alliance_id,
+            AllianceJoinRequest.status == JoinRequestStatus.PENDING,
+        )
+        .order_by(AllianceJoinRequest.created_at)
+    )
+    rows = result.all()
+    out = []
+    for req, user in rows:
+        out.append(
+            {
+                "request_id": req.id,
+                "user_id": user.tg_id,
+                "username": user.username or f"id{user.tg_id}",
+                "created_at": req.created_at,
+            }
+        )
+    return out
+
+
+async def get_officer_ids(session: AsyncSession, alliance_id: int) -> list[int]:
+    """Вернуть tg_id всех лидеров и офицеров альянса (для уведомлений)."""
+    result = await session.execute(
+        select(AllianceMember.user_id).where(
+            AllianceMember.alliance_id == alliance_id,
+            AllianceMember.role.in_([AllianceRole.LEADER, AllianceRole.OFFICER]),
+        )
+    )
+    return [row[0] for row in result.all()]
+
+
+async def handle_request(
+    session: AsyncSession, officer_id: int, request_id: int, accept: bool
+) -> tuple[bool, str]:
+    """
+    Лидер/офицер принимает или отклоняет заявку на вступление.
+
+    Если принять: создаёт AllianceMember, помечает заявку ACCEPTED.
+    Если отклонить: помечает заявку DECLINED.
+    """
+    # Get officer's alliance
+    alliance, officer_member = await _get_alliance_for_user(session, officer_id)
+    if alliance is None:
+        return False, "❌ Ты не состоишь ни в одном альянсе."
+
+    if officer_member.role not in (AllianceRole.LEADER, AllianceRole.OFFICER):
+        return False, "❌ Только лидер или офицер могут обрабатывать заявки."
+
+    # Load the request
+    req_result = await session.execute(
+        select(AllianceJoinRequest).where(
+            AllianceJoinRequest.id == request_id,
+            AllianceJoinRequest.alliance_id == alliance.id,
+            AllianceJoinRequest.status == JoinRequestStatus.PENDING,
+        )
+    )
+    req = req_result.scalar_one_or_none()
+    if req is None:
+        return False, "❌ Заявка не найдена или уже обработана."
+
+    # Load applicant
+    applicant_result = await session.execute(
+        select(User).where(User.tg_id == req.user_id)
+    )
+    applicant = applicant_result.scalar_one_or_none()
+    display = f"@{applicant.username}" if applicant and applicant.username else f"id{req.user_id}"
+
+    if not accept:
+        req.status = JoinRequestStatus.DECLINED
+        await session.flush()
+        return True, f"✅ Заявка игрока <b>{display}</b> отклонена."
+
+    # Accept: check capacity and not already a member
+    existing = await _get_member(session, req.user_id)
+    if existing is not None:
+        req.status = JoinRequestStatus.DECLINED
+        await session.flush()
+        return False, f"❌ Игрок <b>{display}</b> уже состоит в другом альянсе. Заявка отклонена."
+
+    count_result = await session.execute(
+        select(func.count(AllianceMember.id)).where(
+            AllianceMember.alliance_id == alliance.id
+        )
+    )
+    count: int = count_result.scalar_one()
+    max_members = await get_alliance_max_members(session, alliance.id)
+    if count >= max_members:
+        return False, f"❌ Альянс заполнен ({count}/{max_members}). Заявка не может быть принята."
+
+    new_member = AllianceMember(
+        alliance_id=alliance.id,
+        user_id=req.user_id,
+        role=AllianceRole.MEMBER,
+    )
+    session.add(new_member)
+    req.status = JoinRequestStatus.ACCEPTED
+    await session.flush()
+
+    return True, (
+        f"✅ Игрок <b>{display}</b> принят в альянс "
+        f"<b>[{alliance.tag}] {alliance.name}</b>!"
+    )

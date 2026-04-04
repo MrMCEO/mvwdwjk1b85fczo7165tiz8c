@@ -5,7 +5,7 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.models.alliance import AllianceRole
+from bot.models.alliance import PRIVACY_LABELS, AlliancePrivacy, AllianceRole
 from bot.services.alliance import ALLIANCE_UPGRADE_CONFIG
 
 
@@ -19,31 +19,95 @@ def alliance_no_clan_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def alliance_info_kb(role: AllianceRole) -> InlineKeyboardMarkup:
+def alliance_info_kb(role: AllianceRole, pending_requests: int = 0) -> InlineKeyboardMarkup:
     """
     Keyboard shown on the alliance info page.
 
     Buttons depend on the viewer's role:
-    - Everyone: Участники, Покинуть, Назад
-    - LEADER/OFFICER: + Пригласить, Кикнуть, Улучшения
-    - LEADER only: + Распустить
+    - Everyone: Участники, 💰 Пожертвовать, Покинуть, Назад
+    - LEADER/OFFICER: + Пригласить, Кикнуть, Улучшения, 💱 Конвертировать, Заявки
+    - LEADER only: + ⚙️ Приватность, Распустить
     """
     builder = InlineKeyboardBuilder()
 
-    builder.button(text="👥 Участники",       callback_data="alliance_members")
+    builder.button(text="👥 Участники",           callback_data="alliance_members")
+    builder.button(text="💰 Пожертвовать",         callback_data="alliance_donate")
 
     if role in (AllianceRole.LEADER, AllianceRole.OFFICER):
-        builder.button(text="➕ Пригласить",  callback_data="alliance_invite")
-        builder.button(text="🚫 Кикнуть",     callback_data="alliance_kick_list")
-        builder.button(text="🔧 Улучшения",   callback_data="alliance_upgrades")
+        builder.button(text="➕ Пригласить",       callback_data="alliance_invite")
+        builder.button(text="🚫 Кикнуть",          callback_data="alliance_kick_list")
+        builder.button(text="🔧 Улучшения",        callback_data="alliance_upgrades")
+        builder.button(text="💱 Конвертировать казну", callback_data="alliance_convert_treasury")
 
-    builder.button(text="🚪 Покинуть",        callback_data="alliance_leave")
+        req_label = (
+            f"📩 Заявки ({pending_requests})" if pending_requests > 0
+            else "📩 Заявки"
+        )
+        builder.button(text=req_label, callback_data="alliance_requests")
 
     if role == AllianceRole.LEADER:
-        builder.button(text="💀 Распустить",  callback_data="alliance_dissolve")
+        builder.button(text="⚙️ Приватность",      callback_data="alliance_privacy")
+        builder.button(text="💀 Распустить",        callback_data="alliance_dissolve")
 
-    builder.button(text="◀️ Назад",           callback_data="main_menu")
+    builder.button(text="🚪 Покинуть",              callback_data="alliance_leave")
+    builder.button(text="◀️ Назад",                 callback_data="main_menu")
     builder.adjust(1)
+    return builder.as_markup()
+
+
+def alliance_privacy_kb(current: AlliancePrivacy) -> InlineKeyboardMarkup:
+    """Keyboard to select privacy mode."""
+    builder = InlineKeyboardBuilder()
+    for mode in AlliancePrivacy:
+        marker = "✅ " if mode == current else ""
+        label = PRIVACY_LABELS[mode]
+        builder.button(
+            text=f"{marker}{label}",
+            callback_data=f"alliance_set_privacy_{mode.value}",
+        )
+    builder.button(text="◀️ Назад", callback_data="alliance_menu")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def alliance_requests_kb(requests: list[dict]) -> InlineKeyboardMarkup:
+    """
+    Keyboard listing pending join requests with Accept / Decline buttons.
+    Each request dict has: request_id, username.
+    """
+    builder = InlineKeyboardBuilder()
+
+    if not requests:
+        builder.button(text="Нет активных заявок", callback_data="noop")
+    else:
+        for req in requests:
+            rid = req["request_id"]
+            uname = req["username"]
+            builder.button(
+                text=f"👤 @{uname}",
+                callback_data=f"alliance_req_info_{rid}",
+            )
+            builder.button(
+                text="✅ Принять",
+                callback_data=f"alliance_req_accept_{rid}",
+            )
+            builder.button(
+                text="❌ Отклонить",
+                callback_data=f"alliance_req_decline_{rid}",
+            )
+
+    builder.button(text="◀️ Назад", callback_data="alliance_menu")
+
+    if requests:
+        # Group: name button (full row) + two action buttons per request
+        row_scheme = []
+        for _ in requests:
+            row_scheme += [1, 2]  # 1 name row, then 2 action buttons
+        row_scheme.append(1)  # Back button
+        builder.adjust(*row_scheme)
+    else:
+        builder.adjust(1)
+
     return builder.as_markup()
 
 
@@ -127,18 +191,27 @@ def alliance_members_kb(
 
 def alliance_search_kb(alliances: list[dict]) -> InlineKeyboardMarkup:
     """
-    List of alliances with 'Вступить' buttons.
+    List of alliances with 'Вступить' / 'Подать заявку' buttons.
 
-    Each alliance shows: [TAG] Name (members/max).
+    Each alliance shows: [TAG] Name (members/max) + privacy icon.
     """
     builder = InlineKeyboardBuilder()
 
     for a in alliances:
+        privacy = a.get("privacy", AlliancePrivacy.REQUEST)
+        if privacy == AlliancePrivacy.OPEN:
+            icon = "🔓"
+            action_cb = f"alliance_join_{a['id']}"
+        else:
+            # REQUEST mode (CLOSED is filtered out by search_alliances)
+            icon = "📩"
+            action_cb = f"alliance_request_{a['id']}"
+
         label = (
-            f"[{a['tag']}] {a['name']} "
+            f"{icon} [{a['tag']}] {a['name']} "
             f"({a['member_count']}/{a['max_members']})"
         )
-        builder.button(text=label, callback_data=f"alliance_join_{a['id']}")
+        builder.button(text=label, callback_data=action_cb)
 
     if not alliances:
         builder.button(text="Альянсов не найдено", callback_data="noop")

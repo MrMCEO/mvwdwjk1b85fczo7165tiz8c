@@ -1,32 +1,89 @@
-"""Premium subscription keyboards."""
+"""Premium / status system keyboards."""
 
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from bot.services.premium import STATUS_CONFIG, UserStatus
 
-def premium_menu_kb(is_active: bool) -> InlineKeyboardMarkup:
+# Statuses that can be purchased
+_BUYABLE = [
+    UserStatus.BIO_PLUS,
+    UserStatus.BIO_PRO,
+    UserStatus.BIO_ELITE,
+]
+
+
+def status_menu_kb(
+    current_status: UserStatus,
+    statuses: list[UserStatus] | None = None,
+) -> InlineKeyboardMarkup:
     """
-    Keyboard for the premium info/menu screen.
+    Main status-selection keyboard.
 
-    is_active=True  → "Продлить за 200 💎" + "✏️ Установить префикс" buttons
-    is_active=False → "Купить за 200 💎" button
-    Both variants include a "Назад" button.
+    Shows one button per purchasable status.
+    The currently active status is suffixed with '✅ АКТИВЕН'.
+    BIO_LEGEND row is informational only (no callback).
+    Also includes:
+      - '✏️ Установить префикс' if current status has prefix_length > 0
+      - '◀️ Назад' back to main menu
     """
     builder = InlineKeyboardBuilder()
-    if is_active:
-        builder.button(text="🔄 Продлить за 200 💎", callback_data="premium_buy")
+    show = statuses if statuses is not None else _BUYABLE
+
+    for s in show:
+        cfg = STATUS_CONFIG[s]
+        emoji = cfg["emoji"]
+        name = cfg["name"]
+        price = cfg["price"]
+        label = f"{emoji} {name} — {price} 💎/мес"
+        if s == current_status:
+            label += " ✅ АКТИВЕН"
+        builder.button(text=label, callback_data=f"status_buy:{s.value}")
+
+    # Legend — informational, shows a popup on tap
+    legend_cfg = STATUS_CONFIG[UserStatus.BIO_LEGEND]
+    legend_label = f"{legend_cfg['emoji']} {legend_cfg['name']} — только через рефералов (50+)"
+    if current_status == UserStatus.BIO_LEGEND:
+        legend_label += " 👑 АКТИВЕН"
+    builder.button(text=legend_label, callback_data="status_legend_info")
+
+    # Prefix button only for users who can set one
+    if STATUS_CONFIG[current_status]["prefix_length"] > 0:
         builder.button(text="✏️ Установить префикс", callback_data="premium_set_prefix")
-    else:
-        builder.button(text="⭐ Купить за 200 💎", callback_data="premium_buy")
+
     builder.button(text="◀️ Назад", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
 
 
-def premium_confirm_kb() -> InlineKeyboardMarkup:
-    """Confirmation keyboard for premium purchase."""
+def status_confirm_kb(target: UserStatus) -> InlineKeyboardMarkup:
+    """Confirmation keyboard for status purchase."""
+    cfg = STATUS_CONFIG[target]
     builder = InlineKeyboardBuilder()
-    builder.button(text="✅ Купить за 200 💎", callback_data="premium_confirm")
+    builder.button(
+        text=f"✅ Купить {cfg['emoji']} {cfg['name']} за {cfg['price']} 💎",
+        callback_data=f"status_confirm:{target.value}",
+    )
     builder.button(text="❌ Отмена", callback_data="premium_menu")
     builder.adjust(1)
     return builder.as_markup()
+
+
+# ---------------------------------------------------------------------------
+# Legacy wrappers — kept so imports in handlers that used the old API still work
+# ---------------------------------------------------------------------------
+
+
+def premium_menu_kb(is_active: bool) -> InlineKeyboardMarkup:
+    """
+    Backward-compatible keyboard.
+
+    Delegates to status_menu_kb with FREE or BIO_PRO as current status.
+    """
+    status = UserStatus.BIO_PRO if is_active else UserStatus.FREE
+    return status_menu_kb(current_status=status)
+
+
+def premium_confirm_kb() -> InlineKeyboardMarkup:
+    """Backward-compatible purchase confirmation for BIO_PRO."""
+    return status_confirm_kb(UserStatus.BIO_PRO)

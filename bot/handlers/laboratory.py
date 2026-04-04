@@ -22,7 +22,6 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.laboratory import lab_craft_kb, lab_inventory_kb, lab_menu_kb
-from bot.utils.emoji import render_virus_name
 from bot.models.item import ITEM_CONFIG, Item, ItemType
 from bot.services.laboratory import (
     craft_item,
@@ -30,6 +29,7 @@ from bot.services.laboratory import (
     spy_on_player,
     use_item,
 )
+from bot.utils.emoji import render_virus_name
 
 router = Router(name="laboratory")
 

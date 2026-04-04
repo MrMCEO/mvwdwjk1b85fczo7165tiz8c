@@ -1,11 +1,13 @@
 """
-Market service — black market P2P trading and hit contracts.
+БиоБиржа service — P2P trading of items/mutations and hit contracts.
 
 Trading flow:
-  SELL: seller freezes bio_coins (deducted immediately, 5% commission applied).
-        Buyer pays premium_coins → receives bio_coins.
-  BUY:  buyer freezes premium_coins.
-        Fulfiller provides bio_coins → receives premium_coins.
+  SELL_ITEM:     seller lists an item from inventory for a bio_coins price.
+                 5% commission is deducted from buyer's payment upfront.
+                 On purchase: item.owner_id → buyer.
+  SELL_MUTATION: seller lists an unactivated buff mutation for a bio_coins price.
+                 5% commission is deducted from buyer's payment upfront.
+                 On purchase: mutation.owner_id → buyer.
 
 Hit-contract flow:
   Client freezes reward (bio_coins). Hitman claims the contract.
@@ -22,16 +24,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.models.alliance import AllianceMember
 from bot.models.infection import Infection
+from bot.models.item import ITEM_CONFIG, Item
 from bot.models.market import ListingStatus, ListingType, MarketListing
+from bot.models.mutation import Mutation
 from bot.models.resource import Currency, ResourceTransaction, TransactionReason
 from bot.models.user import User
+from bot.services.mutation import MUTATION_CONFIG
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 LISTING_DURATION = timedelta(hours=24)
-SELL_COMMISSION_PCT = 0.05  # 5% комиссия при продаже bio_coins
+SELL_COMMISSION_PCT = 0.05  # 5% комиссия: удерживается с покупателя
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -82,8 +87,9 @@ def _listing_to_dict(listing: MarketListing) -> dict:
         "seller_id": listing.seller_id,
         "listing_type": listing.listing_type,
         "status": listing.status,
-        "amount": listing.amount,
         "price": listing.price,
+        "item_id": listing.item_id,
+        "mutation_id": listing.mutation_id,
         "target_username": listing.target_username,
         "target_id": listing.target_id,
         "reward": listing.reward,
@@ -91,260 +97,259 @@ def _listing_to_dict(listing: MarketListing) -> dict:
         "created_at": listing.created_at,
         "expires_at": listing.expires_at,
         "completed_at": listing.completed_at,
+        # Устаревшие поля (для старых записей в БД)
+        "amount": listing.amount,
     }
 
 
 # ---------------------------------------------------------------------------
-# Trading — SELL listings
+# Item listing
 # ---------------------------------------------------------------------------
 
 
-async def create_sell_listing(
+async def create_item_listing(
     session: AsyncSession,
     seller_id: int,
-    bio_amount: int,
-    premium_price: int,
+    item_id: int,
+    price: int,
 ) -> tuple[bool, str]:
     """
-    Seller freezes bio_coins (deducted immediately) and creates a SELL listing.
+    Seller puts an inventory item on sale for *price* bio_coins.
 
-    5% commission is taken from the bio_amount upfront so the seller receives
-    price * premium_coins when fulfilled; the buyer always receives the full amount.
+    The item must be unused and owned by *seller_id*.
+    The item is "frozen" on the listing — it cannot be used or sold again until cancelled.
 
     Returns (success, message).
     """
-    if bio_amount <= 0:
-        return False, "❌ Количество 🧫 BioCoins должно быть больше нуля."
-    if premium_price <= 0:
+    if price <= 0:
         return False, "❌ Цена должна быть больше нуля."
 
-    seller = await _get_user(session, seller_id, lock=True)
-    if seller is None:
-        return False, "❌ Игрок не найден. Сначала создай профиль через /start."
+    # Verify item ownership and availability
+    result = await session.execute(
+        select(Item).where(
+            and_(
+                Item.id == item_id,
+                Item.owner_id == seller_id,
+                Item.is_used == False,  # noqa: E712
+            )
+        ).with_for_update()
+    )
+    item = result.scalar_one_or_none()
+    if item is None:
+        return False, "❌ Предмет не найден или уже использован."
 
-    # Commission: take 5% from amount to freeze (seller pays it)
-    commission = max(1, round(bio_amount * SELL_COMMISSION_PCT))
-    total_freeze = bio_amount + commission
-
-    if seller.bio_coins < total_freeze:
-        return False, (
-            f"❌ Недостаточно 🧫 BioCoins.\n"
-            f"Нужно: <b>{total_freeze:,}</b> (включая комиссию {commission:,})\n"
-            f"Твой баланс: <b>{seller.bio_coins:,}</b>"
+    # Check item is not already listed
+    existing = await session.execute(
+        select(MarketListing).where(
+            and_(
+                MarketListing.item_id == item_id,
+                MarketListing.status == ListingStatus.ACTIVE,
+            )
         )
+    )
+    if existing.scalar_one_or_none() is not None:
+        return False, "❌ Этот предмет уже выставлен на бирже."
 
-    seller.bio_coins -= total_freeze
-
-    # Record outgoing transaction
-    session.add(ResourceTransaction(
-        user_id=seller_id,
-        amount=-total_freeze,
-        currency=Currency.BIO_COINS,
-        reason=TransactionReason.DONATION,  # reuse closest reason; market is post-MVP
-    ))
+    cfg = ITEM_CONFIG.get(item.item_type, {})
+    item_name = cfg.get("name", item.item_type.value)
+    item_emoji = cfg.get("emoji", "📦")
 
     listing = MarketListing(
         seller_id=seller_id,
-        listing_type=ListingType.SELL_COINS,
+        listing_type=ListingType.SELL_ITEM,
         status=ListingStatus.ACTIVE,
-        amount=bio_amount,
-        price=premium_price,
+        price=price,
+        item_id=item_id,
         expires_at=_now_utc() + LISTING_DURATION,
     )
     session.add(listing)
     await session.flush()
 
     return True, (
-        f"✅ Предложение #{listing.id} создано!\n"
-        f"Продаёшь: <b>{bio_amount:,}</b> 🧫 bio\n"
-        f"Цена: <b>{premium_price:,}</b> 💎 premium\n"
-        f"Комиссия: <b>{commission:,}</b> 🧫 (5%)\n"
-        f"Активно до: {listing.expires_at.strftime('%d.%m %H:%M')} UTC"
+        f"✅ Лот #{listing.id} создан!\n"
+        f"Товар: {item_emoji} <b>{item_name}</b>\n"
+        f"Цена: <b>{price:,}</b> 🧫\n"
+        f"Активен до: {listing.expires_at.strftime('%d.%m %H:%M')} UTC"
     )
 
 
 # ---------------------------------------------------------------------------
-# Trading — BUY listings
+# Mutation listing
 # ---------------------------------------------------------------------------
 
 
-async def create_buy_listing(
+async def create_mutation_listing(
     session: AsyncSession,
-    buyer_id: int,
-    bio_amount: int,
-    premium_price: int,
+    seller_id: int,
+    mutation_id: int,
+    price: int,
 ) -> tuple[bool, str]:
     """
-    Buyer freezes premium_coins and creates a BUY listing.
+    Seller puts an unactivated buff mutation on sale for *price* bio_coins.
+
+    The mutation must be in inventory (is_active=False, is_used=False) and owned by *seller_id*.
 
     Returns (success, message).
     """
-    if bio_amount <= 0:
-        return False, "❌ Количество 🧫 BioCoins должно быть больше нуля."
-    if premium_price <= 0:
+    if price <= 0:
         return False, "❌ Цена должна быть больше нуля."
 
-    buyer = await _get_user(session, buyer_id, lock=True)
-    if buyer is None:
-        return False, "❌ Игрок не найден. Сначала создай профиль через /start."
+    result = await session.execute(
+        select(Mutation).where(
+            and_(
+                Mutation.id == mutation_id,
+                Mutation.owner_id == seller_id,
+                Mutation.is_active == False,  # noqa: E712
+                Mutation.is_used == False,    # noqa: E712
+            )
+        ).with_for_update()
+    )
+    mutation = result.scalar_one_or_none()
+    if mutation is None:
+        return False, "❌ Мутация не найдена или уже активирована/использована."
 
-    if buyer.premium_coins < premium_price:
-        return False, (
-            f"❌ Недостаточно 💎 PremiumCoins.\n"
-            f"Нужно: <b>{premium_price:,}</b> 💎\n"
-            f"Твой баланс: <b>{buyer.premium_coins:,}</b>"
+    # Check not already listed
+    existing = await session.execute(
+        select(MarketListing).where(
+            and_(
+                MarketListing.mutation_id == mutation_id,
+                MarketListing.status == ListingStatus.ACTIVE,
+            )
         )
+    )
+    if existing.scalar_one_or_none() is not None:
+        return False, "❌ Эта мутация уже выставлена на бирже."
 
-    buyer.premium_coins -= premium_price
-
-    session.add(ResourceTransaction(
-        user_id=buyer_id,
-        amount=-premium_price,
-        currency=Currency.PREMIUM_COINS,
-        reason=TransactionReason.DONATION,
-    ))
+    cfg = MUTATION_CONFIG.get(mutation.mutation_type, {})
+    description = cfg.get("description", mutation.mutation_type.value)
+    rarity_label = mutation.rarity.value
 
     listing = MarketListing(
-        seller_id=buyer_id,
-        listing_type=ListingType.BUY_COINS,
+        seller_id=seller_id,
+        listing_type=ListingType.SELL_MUTATION,
         status=ListingStatus.ACTIVE,
-        amount=bio_amount,
-        price=premium_price,
+        price=price,
+        mutation_id=mutation_id,
         expires_at=_now_utc() + LISTING_DURATION,
     )
     session.add(listing)
     await session.flush()
 
     return True, (
-        f"✅ Запрос #{listing.id} создан!\n"
-        f"Хочешь купить: <b>{bio_amount:,}</b> 🧫 bio\n"
-        f"Готов заплатить: <b>{premium_price:,}</b> 💎 premium\n"
-        f"Активно до: {listing.expires_at.strftime('%d.%m %H:%M')} UTC"
+        f"✅ Лот #{listing.id} создан!\n"
+        f"Мутация: 🧬 <b>{description}</b> [{rarity_label}]\n"
+        f"Цена: <b>{price:,}</b> 🧫\n"
+        f"Активен до: {listing.expires_at.strftime('%d.%m %H:%M')} UTC"
     )
 
 
 # ---------------------------------------------------------------------------
-# Fulfill a listing
+# Purchase a listing (SELL_ITEM / SELL_MUTATION)
 # ---------------------------------------------------------------------------
 
 
-async def fulfill_listing(
+async def purchase_listing(
     session: AsyncSession,
-    fulfiller_id: int,
+    buyer_id: int,
     listing_id: int,
 ) -> tuple[bool, str]:
     """
-    Execute a SELL or BUY trade.
+    Buy an item or mutation from the БиоБиржа.
 
-    SELL: fulfiller pays premium_price → receives bio_amount.
-    BUY:  fulfiller provides bio_amount → receives premium_price.
+    5% commission is charged on top of the listing price (buyer pays price * 1.05).
+    Seller receives the full listed price.
+    Ownership of the item/mutation is transferred to the buyer.
 
     Returns (success, message).
     """
     listing = await _get_listing(session, listing_id, lock=True)
 
     if listing is None:
-        return False, "❌ Предложение не найдено."
+        return False, "❌ Лот не найден."
     if listing.status != ListingStatus.ACTIVE:
-        return False, "❌ Предложение уже не активно."
-    if listing.listing_type == ListingType.HIT_CONTRACT:
-        return False, "❌ Это контракт, не торговое предложение."
-    if listing.seller_id == fulfiller_id:
-        return False, "❌ Нельзя выполнить собственное предложение."
+        return False, "❌ Лот уже не активен."
+    if listing.listing_type not in (ListingType.SELL_ITEM, ListingType.SELL_MUTATION):
+        return False, "❌ Это не торговый лот."
+    if listing.seller_id == buyer_id:
+        return False, "❌ Нельзя купить собственный лот."
     if listing.expires_at < _now_utc():
         listing.status = ListingStatus.EXPIRED
         await session.flush()
-        return False, "❌ Предложение истекло."
+        return False, "❌ Лот истёк."
 
-    fulfiller = await _get_user(session, fulfiller_id, lock=True)
-    if fulfiller is None:
+    commission = max(1, round(listing.price * SELL_COMMISSION_PCT))
+    total_cost = listing.price + commission
+
+    buyer = await _get_user(session, buyer_id, lock=True)
+    if buyer is None:
         return False, "❌ Игрок не найден."
+
+    if buyer.bio_coins < total_cost:
+        return False, (
+            f"❌ Недостаточно 🧫 BioCoins.\n"
+            f"Цена: <b>{listing.price:,}</b> 🧫 + комиссия <b>{commission:,}</b> 🧫\n"
+            f"Итого: <b>{total_cost:,}</b> 🧫\n"
+            f"Твой баланс: <b>{buyer.bio_coins:,}</b> 🧫"
+        )
 
     seller = await _get_user(session, listing.seller_id, lock=True)
     if seller is None:
         return False, "❌ Продавец не найден."
 
-    now = _now_utc()
+    # Deduct from buyer
+    buyer.bio_coins -= total_cost
+    session.add(ResourceTransaction(
+        user_id=buyer_id,
+        amount=-total_cost,
+        currency=Currency.BIO_COINS,
+        reason=TransactionReason.DONATION,
+    ))
 
-    if listing.listing_type == ListingType.SELL_COINS:
-        # Fulfiller pays premium, receives bio
-        if fulfiller.premium_coins < listing.price:
-            return False, (
-                f"❌ Недостаточно 💎 PremiumCoins.\n"
-                f"Нужно: <b>{listing.price:,}</b> 💎\n"
-                f"Твой баланс: <b>{fulfiller.premium_coins:,}</b>"
-            )
-        fulfiller.premium_coins -= listing.price
-        fulfiller.bio_coins += listing.amount
-        seller.premium_coins += listing.price
+    # Pay seller (full price, commission stays with the system)
+    seller.bio_coins += listing.price
+    session.add(ResourceTransaction(
+        user_id=listing.seller_id,
+        amount=listing.price,
+        currency=Currency.BIO_COINS,
+        reason=TransactionReason.DONATION,
+    ))
 
-        session.add(ResourceTransaction(
-            user_id=fulfiller_id,
-            amount=-listing.price,
-            currency=Currency.PREMIUM_COINS,
-            reason=TransactionReason.DONATION,
-        ))
-        session.add(ResourceTransaction(
-            user_id=fulfiller_id,
-            amount=listing.amount,
-            currency=Currency.BIO_COINS,
-            reason=TransactionReason.DONATION,
-        ))
-        session.add(ResourceTransaction(
-            user_id=listing.seller_id,
-            amount=listing.price,
-            currency=Currency.PREMIUM_COINS,
-            reason=TransactionReason.DONATION,
-        ))
-
-        msg = (
-            f"✅ Сделка #{listing_id} выполнена!\n"
-            f"Ты заплатил: <b>{listing.price:,}</b> 💎 premium\n"
-            f"Ты получил: <b>{listing.amount:,}</b> 🧫 bio"
+    # Transfer ownership
+    if listing.listing_type == ListingType.SELL_ITEM and listing.item_id is not None:
+        item_result = await session.execute(
+            select(Item).where(Item.id == listing.item_id).with_for_update()
         )
+        item = item_result.scalar_one_or_none()
+        if item is None:
+            return False, "❌ Предмет не найден (возможно, уже использован)."
+        item.owner_id = buyer_id
+        cfg = ITEM_CONFIG.get(item.item_type, {})
+        goods_label = f"{cfg.get('emoji', '📦')} {cfg.get('name', item.item_type.value)}"
 
-    else:  # BUY_COINS — fulfiller provides bio, receives premium
-        if fulfiller.bio_coins < listing.amount:
-            return False, (
-                f"❌ Недостаточно 🧫 BioCoins.\n"
-                f"Нужно: <b>{listing.amount:,}</b> 🧫\n"
-                f"Твой баланс: <b>{fulfiller.bio_coins:,}</b>"
-            )
-        fulfiller.bio_coins -= listing.amount
-        fulfiller.premium_coins += listing.price
-        seller.bio_coins += listing.amount  # buyer (creator of BUY listing) receives bio
-
-        session.add(ResourceTransaction(
-            user_id=fulfiller_id,
-            amount=-listing.amount,
-            currency=Currency.BIO_COINS,
-            reason=TransactionReason.DONATION,
-        ))
-        session.add(ResourceTransaction(
-            user_id=fulfiller_id,
-            amount=listing.price,
-            currency=Currency.PREMIUM_COINS,
-            reason=TransactionReason.DONATION,
-        ))
-        session.add(ResourceTransaction(
-            user_id=listing.seller_id,
-            amount=listing.amount,
-            currency=Currency.BIO_COINS,
-            reason=TransactionReason.DONATION,
-        ))
-
-        msg = (
-            f"✅ Сделка #{listing_id} выполнена!\n"
-            f"Ты продал: <b>{listing.amount:,}</b> 🧫 bio\n"
-            f"Ты получил: <b>{listing.price:,}</b> 💎 premium"
+    elif listing.listing_type == ListingType.SELL_MUTATION and listing.mutation_id is not None:
+        mut_result = await session.execute(
+            select(Mutation).where(Mutation.id == listing.mutation_id).with_for_update()
         )
+        mutation = mut_result.scalar_one_or_none()
+        if mutation is None:
+            return False, "❌ Мутация не найдена."
+        mutation.owner_id = buyer_id
+        cfg = MUTATION_CONFIG.get(mutation.mutation_type, {})
+        goods_label = f"🧬 {cfg.get('description', mutation.mutation_type.value)}"
+
+    else:
+        return False, "❌ Неверный тип лота."
 
     listing.status = ListingStatus.COMPLETED
-    listing.buyer_id = fulfiller_id
-    listing.completed_at = now
+    listing.buyer_id = buyer_id
+    listing.completed_at = _now_utc()
     await session.flush()
 
-    return True, msg
+    return True, (
+        f"✅ Покупка #{listing_id} выполнена!\n"
+        f"Получено: <b>{goods_label}</b>\n"
+        f"Заплачено: <b>{listing.price:,}</b> 🧫 + комиссия <b>{commission:,}</b> 🧫"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -358,48 +363,25 @@ async def cancel_listing(
     listing_id: int,
 ) -> tuple[bool, str]:
     """
-    Cancel an active listing and refund the frozen funds.
+    Cancel an active listing.
 
-    Only the listing creator can cancel.
+    Only the listing creator can cancel. No funds are frozen for item/mutation
+    listings, so cancellation is always free (just unlocks the item/mutation).
 
     Returns (success, message).
     """
     listing = await _get_listing(session, listing_id, lock=True)
     if listing is None:
-        return False, "❌ Предложение не найдено."
+        return False, "❌ Лот не найден."
     if listing.seller_id != user_id:
-        return False, "❌ Ты можешь отменить только своё предложение."
+        return False, "❌ Ты можешь отменить только свой лот."
     if listing.status != ListingStatus.ACTIVE:
-        return False, "❌ Предложение уже не активно."
+        return False, "❌ Лот уже не активен."
 
-    owner = await _get_user(session, user_id, lock=True)
-    if owner is None:
-        return False, "❌ Игрок не найден."
-
-    # Refund depending on listing type
-    if listing.listing_type == ListingType.SELL_COINS:
-        commission = max(1, round(listing.amount * SELL_COMMISSION_PCT))
-        refund = listing.amount + commission
-        owner.bio_coins += refund
-        session.add(ResourceTransaction(
-            user_id=user_id,
-            amount=refund,
-            currency=Currency.BIO_COINS,
-            reason=TransactionReason.DONATION,
-        ))
-        refund_text = f"<b>{refund:,}</b> 🧫 bio (включая комиссию {commission:,})"
-
-    elif listing.listing_type == ListingType.BUY_COINS:
-        owner.premium_coins += listing.price
-        session.add(ResourceTransaction(
-            user_id=user_id,
-            amount=listing.price,
-            currency=Currency.PREMIUM_COINS,
-            reason=TransactionReason.DONATION,
-        ))
-        refund_text = f"<b>{listing.price:,}</b> 💎 premium"
-
-    else:  # HIT_CONTRACT
+    if listing.listing_type == ListingType.HIT_CONTRACT:
+        owner = await _get_user(session, user_id, lock=True)
+        if owner is None:
+            return False, "❌ Игрок не найден."
         owner.bio_coins += listing.reward
         session.add(ResourceTransaction(
             user_id=user_id,
@@ -407,14 +389,17 @@ async def cancel_listing(
             currency=Currency.BIO_COINS,
             reason=TransactionReason.DONATION,
         ))
-        refund_text = f"<b>{listing.reward:,}</b> 🧫 bio (награда)"
+        refund_text = f"Возвращено: <b>{listing.reward:,}</b> 🧫 (награда)"
+    else:
+        # SELL_ITEM / SELL_MUTATION — ничего не было заморожено
+        refund_text = "Предмет/мутация снова доступны в инвентаре."
 
     listing.status = ListingStatus.CANCELLED
     await session.flush()
 
     return True, (
-        f"✅ Предложение #{listing_id} отменено.\n"
-        f"Возвращено: {refund_text}"
+        f"✅ Лот #{listing_id} отменён.\n"
+        f"{refund_text}"
     )
 
 
@@ -497,7 +482,7 @@ async def create_hit_contract(
     return True, (
         f"✅ Контракт #{listing.id} размещён!\n"
         f"🎯 Цель: @{clean_username}\n"
-        f"💰 Награда: <b>{reward_bio:,}</b> 🧫 bio\n"
+        f"💰 Награда: <b>{reward_bio:,}</b> 🧫\n"
         f"Активен до: {listing.expires_at.strftime('%d.%m %H:%M')} UTC\n\n"
         f"Киллер должен заразить цель, чтобы получить награду."
     )
@@ -566,7 +551,7 @@ async def claim_hit_contract(
         return True, (
             f"🎯 Контракт #{listing_id} выполнен мгновенно!\n"
             f"Цель @{listing.target_username} уже заражена тобой.\n"
-            f"💰 Награда: <b>{listing.reward:,}</b> 🧫 bio зачислена."
+            f"💰 Награда: <b>{listing.reward:,}</b> 🧫 зачислена."
         )
 
     # Mark hitman and wait
@@ -576,7 +561,7 @@ async def claim_hit_contract(
     return True, (
         f"✅ Контракт #{listing_id} принят!\n"
         f"🎯 Цель: @{listing.target_username}\n"
-        f"💰 Награда: <b>{listing.reward:,}</b> 🧫 bio\n\n"
+        f"💰 Награда: <b>{listing.reward:,}</b> 🧫\n\n"
         f"Заразь цель, чтобы получить награду.\n"
         f"Награда выплатится автоматически после успешного заражения."
     )
@@ -670,6 +655,9 @@ async def expire_listings(session: AsyncSession) -> int:
     """
     Mark all overdue ACTIVE listings as EXPIRED and refund frozen funds.
 
+    For SELL_ITEM / SELL_MUTATION: nothing was frozen, so just mark as expired.
+    For HIT_CONTRACT: refund the reward to the client.
+
     Returns the number of listings expired.
     """
     now = _now_utc()
@@ -684,37 +672,17 @@ async def expire_listings(session: AsyncSession) -> int:
     expired = result.scalars().all()
 
     for listing in expired:
-        owner = await _get_user(session, listing.seller_id, lock=True)
-        if owner is None:
-            listing.status = ListingStatus.EXPIRED
-            continue
-
-        if listing.listing_type == ListingType.SELL_COINS:
-            commission = max(1, round(listing.amount * SELL_COMMISSION_PCT))
-            refund = listing.amount + commission
-            owner.bio_coins += refund
-            session.add(ResourceTransaction(
-                user_id=listing.seller_id,
-                amount=refund,
-                currency=Currency.BIO_COINS,
-                reason=TransactionReason.DONATION,
-            ))
-        elif listing.listing_type == ListingType.BUY_COINS:
-            owner.premium_coins += listing.price
-            session.add(ResourceTransaction(
-                user_id=listing.seller_id,
-                amount=listing.price,
-                currency=Currency.PREMIUM_COINS,
-                reason=TransactionReason.DONATION,
-            ))
-        elif listing.listing_type == ListingType.HIT_CONTRACT:
-            owner.bio_coins += listing.reward
-            session.add(ResourceTransaction(
-                user_id=listing.seller_id,
-                amount=listing.reward,
-                currency=Currency.BIO_COINS,
-                reason=TransactionReason.DONATION,
-            ))
+        if listing.listing_type == ListingType.HIT_CONTRACT:
+            owner = await _get_user(session, listing.seller_id, lock=True)
+            if owner is not None:
+                owner.bio_coins += listing.reward
+                session.add(ResourceTransaction(
+                    user_id=listing.seller_id,
+                    amount=listing.reward,
+                    currency=Currency.BIO_COINS,
+                    reason=TransactionReason.DONATION,
+                ))
+        # SELL_ITEM / SELL_MUTATION: nothing to refund
 
         listing.status = ListingStatus.EXPIRED
 

@@ -21,11 +21,29 @@ class AllianceRole(enum.Enum):
     MEMBER = "MEMBER"    # Участник
 
 
+class AlliancePrivacy(enum.Enum):
+    CLOSED = "CLOSED"    # 🔒 только приглашения
+    REQUEST = "REQUEST"  # 📩 по запросу (вступление через заявку)
+    OPEN = "OPEN"        # 🔓 открытый (вступление без одобрения)
+
+
+class JoinRequestStatus(enum.Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    DECLINED = "DECLINED"
+
+
 # Human-readable labels with emoji
 ROLE_LABELS: dict[AllianceRole, str] = {
     AllianceRole.LEADER: "👑 Лидер",
     AllianceRole.OFFICER: "⚔️ Офицер",
     AllianceRole.MEMBER: "👤 Участник",
+}
+
+PRIVACY_LABELS: dict[AlliancePrivacy, str] = {
+    AlliancePrivacy.CLOSED: "🔒 Закрытый",
+    AlliancePrivacy.REQUEST: "📩 По запросу",
+    AlliancePrivacy.OPEN: "🔓 Открытый",
 }
 
 
@@ -48,6 +66,12 @@ class Alliance(Base):
     # Alliance upgrade currency
     alliance_coins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
+    # Treasury: bio_coins donated by members, converted to alliance_coins in bulk
+    treasury_bio: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    # Privacy mode: OPEN / REQUEST / CLOSED
+    privacy: Mapped[str] = mapped_column(String(10), default="REQUEST", server_default="REQUEST")
+
     # Upgrade levels
     shield_level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     morale_level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -56,6 +80,9 @@ class Alliance(Base):
     regen_level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     members: Mapped[list[AllianceMember]] = relationship(
+        back_populates="alliance", cascade="all, delete-orphan"
+    )
+    join_requests: Mapped[list[AllianceJoinRequest]] = relationship(
         back_populates="alliance", cascade="all, delete-orphan"
     )
     leader: Mapped[User] = relationship("User", foreign_keys=[leader_id])
@@ -86,4 +113,31 @@ class AllianceMember(Base):
         return (
             f"<AllianceMember alliance_id={self.alliance_id} "
             f"user_id={self.user_id} role={self.role}>"
+        )
+
+
+class AllianceJoinRequest(Base):
+    """Pending/processed join requests for REQUEST-mode alliances."""
+
+    __tablename__ = "alliance_join_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    alliance_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("alliances.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.tg_id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    status: Mapped[JoinRequestStatus] = mapped_column(
+        Enum(JoinRequestStatus), default=JoinRequestStatus.PENDING
+    )
+
+    alliance: Mapped[Alliance] = relationship(back_populates="join_requests")
+    user: Mapped[User] = relationship("User")
+
+    def __repr__(self) -> str:
+        return (
+            f"<AllianceJoinRequest id={self.id} alliance_id={self.alliance_id} "
+            f"user_id={self.user_id} status={self.status}>"
         )

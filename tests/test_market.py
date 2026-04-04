@@ -1,20 +1,28 @@
 """
-Unit tests for bot/services/market.py
+Unit tests for bot/services/market.py (БиоБиржа)
 """
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.models.item import Item, ItemType
 from bot.models.market import ListingStatus, ListingType, MarketListing
+from bot.models.mutation import Mutation, MutationRarity, MutationType
 from bot.models.user import User
 from bot.services.market import (
     SELL_COMMISSION_PCT,
     cancel_listing,
     create_hit_contract,
-    create_sell_listing,
-    fulfill_listing,
+    create_item_listing,
+    create_mutation_listing,
+    purchase_listing,
 )
 from bot.services.player import create_player
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 async def _give_bio(session: AsyncSession, tg_id: int, amount: int) -> None:
@@ -24,172 +32,293 @@ async def _give_bio(session: AsyncSession, tg_id: int, amount: int) -> None:
     await session.flush()
 
 
-async def _give_premium(session: AsyncSession, tg_id: int, amount: int) -> None:
-    result = await session.execute(select(User).where(User.tg_id == tg_id))
-    user = result.scalar_one()
-    user.premium_coins = amount
+async def _create_item(session: AsyncSession, owner_id: int) -> Item:
+    item = Item(owner_id=owner_id, item_type=ItemType.VACCINE)
+    session.add(item)
     await session.flush()
+    return item
 
 
-async def test_create_sell_listing(session: AsyncSession):
-    """Seller with enough coins creates a SELL listing and coins are deducted."""
+async def _create_inventory_mutation(session: AsyncSession, owner_id: int) -> Mutation:
+    """Create a buff mutation in inventory (is_active=False)."""
+    m = Mutation(
+        owner_id=owner_id,
+        mutation_type=MutationType.TOXIC_SPIKE,
+        rarity=MutationRarity.COMMON,
+        effect_value=0.30,
+        duration_hours=6.0,
+        is_active=False,
+        is_used=False,
+    )
+    session.add(m)
+    await session.flush()
+    return m
+
+
+# ---------------------------------------------------------------------------
+# SELL_ITEM tests
+# ---------------------------------------------------------------------------
+
+
+async def test_create_item_listing(session: AsyncSession):
+    """Seller creates an item listing successfully."""
     await create_player(session, tg_id=8001, username="seller1")
-    await _give_bio(session, 8001, 1000)
+    item = await _create_item(session, owner_id=8001)
 
-    ok, msg = await create_sell_listing(
-        session, seller_id=8001, bio_amount=100, premium_price=10
-    )
+    ok, msg = await create_item_listing(session, seller_id=8001, item_id=item.id, price=100)
     assert ok is True
-    assert "Предложение" in msg
+    assert "Лот" in msg
+    assert "100" in msg
 
-    # Commission = max(1, round(100 * 0.05)) = 5; total frozen = 105
-    result = await session.execute(select(User).where(User.tg_id == 8001))
-    user = result.scalar_one()
-    commission = max(1, round(100 * SELL_COMMISSION_PCT))
-    assert user.bio_coins == 1000 - 100 - commission
-
-
-async def test_create_sell_listing_not_enough_coins(session: AsyncSession):
-    """Seller without enough coins receives an error."""
-    await create_player(session, tg_id=8002, username="seller2")
-    # bio_coins = 0
-
-    ok, msg = await create_sell_listing(
-        session, seller_id=8002, bio_amount=500, premium_price=50
+    # Listing should exist as ACTIVE
+    result = await session.execute(
+        select(MarketListing).where(MarketListing.seller_id == 8001)
     )
+    listing = result.scalar_one()
+    assert listing.listing_type == ListingType.SELL_ITEM
+    assert listing.status == ListingStatus.ACTIVE
+    assert listing.item_id == item.id
+
+
+async def test_create_item_listing_zero_price(session: AsyncSession):
+    """Price of zero is rejected."""
+    await create_player(session, tg_id=8002, username="seller2")
+    item = await _create_item(session, owner_id=8002)
+
+    ok, msg = await create_item_listing(session, seller_id=8002, item_id=item.id, price=0)
     assert ok is False
-    assert "Недостаточно" in msg
+    assert "Цена" in msg
 
 
-async def test_fulfill_listing(session: AsyncSession):
-    """Buyer with enough premium_coins fulfills a SELL listing."""
+async def test_create_item_listing_wrong_owner(session: AsyncSession):
+    """Cannot list item owned by another player."""
+    await create_player(session, tg_id=8003, username="seller3")
+    await create_player(session, tg_id=8004, username="other4")
+    item = await _create_item(session, owner_id=8004)
+
+    ok, msg = await create_item_listing(session, seller_id=8003, item_id=item.id, price=100)
+    assert ok is False
+    assert "не найден" in msg.lower() or "Предмет" in msg
+
+
+async def test_purchase_item_listing(session: AsyncSession):
+    """Buyer purchases an item listing; ownership transfers, bio_coins deducted."""
     await create_player(session, tg_id=8010, username="seller10")
     await create_player(session, tg_id=8011, username="buyer11")
-    await _give_bio(session, 8010, 500)
-    await _give_premium(session, 8011, 100)
+    item = await _create_item(session, owner_id=8010)
+    await _give_bio(session, 8011, 500)
 
-    ok_create, _ = await create_sell_listing(
-        session, seller_id=8010, bio_amount=100, premium_price=10
-    )
+    price = 100
+    ok_create, _ = await create_item_listing(session, seller_id=8010, item_id=item.id, price=price)
     assert ok_create is True
 
-    # Find the listing id
     result = await session.execute(
         select(MarketListing).where(MarketListing.seller_id == 8010)
     )
     listing = result.scalar_one()
 
-    ok_fulfill, msg = await fulfill_listing(
-        session, fulfiller_id=8011, listing_id=listing.id
-    )
-    assert ok_fulfill is True
-    assert "выполнена" in msg
+    ok_buy, msg = await purchase_listing(session, buyer_id=8011, listing_id=listing.id)
+    assert ok_buy is True
+    assert "Покупка" in msg
 
     await session.refresh(listing)
     assert listing.status == ListingStatus.COMPLETED
+    assert listing.buyer_id == 8011
+
+    # Item ownership transferred
+    await session.refresh(item)
+    assert item.owner_id == 8011
+
+    # Buyer paid price + 5% commission
+    commission = max(1, round(price * SELL_COMMISSION_PCT))
+    result = await session.execute(select(User).where(User.tg_id == 8011))
+    buyer = result.scalar_one()
+    assert buyer.bio_coins == 500 - price - commission
+
+    # Seller received the price
+    result = await session.execute(select(User).where(User.tg_id == 8010))
+    seller = result.scalar_one()
+    assert seller.bio_coins == price
 
 
-async def test_fulfill_own_listing(session: AsyncSession):
-    """A seller cannot fulfill their own listing."""
+async def test_purchase_own_listing(session: AsyncSession):
+    """A seller cannot buy their own listing."""
     await create_player(session, tg_id=8020, username="seller20")
+    item = await _create_item(session, owner_id=8020)
     await _give_bio(session, 8020, 500)
 
-    await create_sell_listing(
-        session, seller_id=8020, bio_amount=100, premium_price=10
-    )
-
+    await create_item_listing(session, seller_id=8020, item_id=item.id, price=100)
     result = await session.execute(
         select(MarketListing).where(MarketListing.seller_id == 8020)
     )
     listing = result.scalar_one()
 
-    ok, msg = await fulfill_listing(
-        session, fulfiller_id=8020, listing_id=listing.id
-    )
+    ok, msg = await purchase_listing(session, buyer_id=8020, listing_id=listing.id)
     assert ok is False
-    assert "собственное" in msg
+    assert "собственный" in msg.lower() or "Нельзя" in msg
 
 
-async def test_cancel_listing(session: AsyncSession):
-    """Seller can cancel their listing and receive a refund."""
+async def test_purchase_not_enough_bio(session: AsyncSession):
+    """Buyer without enough bio_coins is rejected."""
     await create_player(session, tg_id=8030, username="seller30")
-    await _give_bio(session, 8030, 1000)
+    await create_player(session, tg_id=8031, username="buyer31")
+    item = await _create_item(session, owner_id=8030)
+    # buyer has 0 bio_coins by default
 
-    commission = max(1, round(200 * SELL_COMMISSION_PCT))
-    total_frozen = 200 + commission
-
-    ok_create, _ = await create_sell_listing(
-        session, seller_id=8030, bio_amount=200, premium_price=20
-    )
-    assert ok_create is True
-
+    await create_item_listing(session, seller_id=8030, item_id=item.id, price=500)
     result = await session.execute(
         select(MarketListing).where(MarketListing.seller_id == 8030)
     )
     listing = result.scalar_one()
 
-    ok_cancel, msg = await cancel_listing(
-        session, user_id=8030, listing_id=listing.id
-    )
-    assert ok_cancel is True
-    assert "отменено" in msg
-
-    await session.refresh(listing)
-    assert listing.status == ListingStatus.CANCELLED
-
-    # Balance restored
-    result = await session.execute(select(User).where(User.tg_id == 8030))
-    user = result.scalar_one()
-    assert user.bio_coins == 1000  # full refund including commission
+    ok, msg = await purchase_listing(session, buyer_id=8031, listing_id=listing.id)
+    assert ok is False
+    assert "Недостаточно" in msg
 
 
-async def test_cancel_listing_not_owner(session: AsyncSession):
-    """Only the listing creator can cancel it."""
+# ---------------------------------------------------------------------------
+# SELL_MUTATION tests
+# ---------------------------------------------------------------------------
+
+
+async def test_create_mutation_listing(session: AsyncSession):
+    """Seller creates a mutation listing successfully."""
     await create_player(session, tg_id=8040, username="seller40")
-    await create_player(session, tg_id=8041, username="other41")
-    await _give_bio(session, 8040, 500)
+    m = await _create_inventory_mutation(session, owner_id=8040)
 
-    await create_sell_listing(
-        session, seller_id=8040, bio_amount=100, premium_price=10
+    ok, msg = await create_mutation_listing(
+        session, seller_id=8040, mutation_id=m.id, price=200
     )
+    assert ok is True
+    assert "Лот" in msg
 
     result = await session.execute(
         select(MarketListing).where(MarketListing.seller_id == 8040)
     )
     listing = result.scalar_one()
+    assert listing.listing_type == ListingType.SELL_MUTATION
+    assert listing.mutation_id == m.id
 
-    ok, msg = await cancel_listing(
-        session, user_id=8041, listing_id=listing.id
+
+async def test_create_mutation_listing_active_rejected(session: AsyncSession):
+    """Cannot list an already-active mutation."""
+    await create_player(session, tg_id=8041, username="seller41")
+    m = Mutation(
+        owner_id=8041,
+        mutation_type=MutationType.TOXIC_SPIKE,
+        rarity=MutationRarity.COMMON,
+        effect_value=0.30,
+        duration_hours=6.0,
+        is_active=True,   # already active!
+        is_used=False,
+    )
+    session.add(m)
+    await session.flush()
+
+    ok, msg = await create_mutation_listing(
+        session, seller_id=8041, mutation_id=m.id, price=200
     )
     assert ok is False
-    assert "своё" in msg
+    assert "не найдена" in msg.lower() or "активирована" in msg
+
+
+async def test_purchase_mutation_listing(session: AsyncSession):
+    """Buyer purchases a mutation; ownership transfers."""
+    await create_player(session, tg_id=8050, username="seller50")
+    await create_player(session, tg_id=8051, username="buyer51")
+    m = await _create_inventory_mutation(session, owner_id=8050)
+    await _give_bio(session, 8051, 1000)
+
+    price = 300
+    await create_mutation_listing(session, seller_id=8050, mutation_id=m.id, price=price)
+    result = await session.execute(
+        select(MarketListing).where(MarketListing.seller_id == 8050)
+    )
+    listing = result.scalar_one()
+
+    ok, msg = await purchase_listing(session, buyer_id=8051, listing_id=listing.id)
+    assert ok is True
+
+    await session.refresh(m)
+    assert m.owner_id == 8051
+
+    commission = max(1, round(price * SELL_COMMISSION_PCT))
+    result = await session.execute(select(User).where(User.tg_id == 8051))
+    buyer = result.scalar_one()
+    assert buyer.bio_coins == 1000 - price - commission
+
+
+# ---------------------------------------------------------------------------
+# Cancel listing tests
+# ---------------------------------------------------------------------------
+
+
+async def test_cancel_item_listing(session: AsyncSession):
+    """Seller can cancel an item listing (no funds frozen, just unlocked)."""
+    await create_player(session, tg_id=8060, username="seller60")
+    item = await _create_item(session, owner_id=8060)
+
+    await create_item_listing(session, seller_id=8060, item_id=item.id, price=100)
+    result = await session.execute(
+        select(MarketListing).where(MarketListing.seller_id == 8060)
+    )
+    listing = result.scalar_one()
+
+    ok, msg = await cancel_listing(session, user_id=8060, listing_id=listing.id)
+    assert ok is True
+    assert "отменён" in msg.lower() or "Лот" in msg
+
+    await session.refresh(listing)
+    assert listing.status == ListingStatus.CANCELLED
+
+
+async def test_cancel_listing_not_owner(session: AsyncSession):
+    """Only the listing creator can cancel it."""
+    await create_player(session, tg_id=8070, username="seller70")
+    await create_player(session, tg_id=8071, username="other71")
+    item = await _create_item(session, owner_id=8070)
+
+    await create_item_listing(session, seller_id=8070, item_id=item.id, price=100)
+    result = await session.execute(
+        select(MarketListing).where(MarketListing.seller_id == 8070)
+    )
+    listing = result.scalar_one()
+
+    ok, msg = await cancel_listing(session, user_id=8071, listing_id=listing.id)
+    assert ok is False
+    assert "свой" in msg.lower() or "своё" in msg.lower() or "Нельзя" in msg
+
+
+# ---------------------------------------------------------------------------
+# Hit contract tests (unchanged)
+# ---------------------------------------------------------------------------
 
 
 async def test_create_hit_contract(session: AsyncSession):
     """Client can place a hit contract on another player."""
-    await create_player(session, tg_id=8050, username="client50")
-    await create_player(session, tg_id=8051, username="target51")
-    await _give_bio(session, 8050, 500)
+    await create_player(session, tg_id=8080, username="client80")
+    await create_player(session, tg_id=8081, username="target81")
+    await _give_bio(session, 8080, 500)
 
     ok, msg = await create_hit_contract(
-        session, client_id=8050, target_username="target51", reward_bio=200
+        session, client_id=8080, target_username="target81", reward_bio=200
     )
     assert ok is True
     assert "Контракт" in msg
-    assert "target51" in msg
+    assert "target81" in msg
 
-    result = await session.execute(select(User).where(User.tg_id == 8050))
+    result = await session.execute(select(User).where(User.tg_id == 8080))
     user = result.scalar_one()
     assert user.bio_coins == 300
 
 
 async def test_create_hit_contract_self(session: AsyncSession):
     """Creating a hit contract on yourself fails."""
-    await create_player(session, tg_id=8060, username="self60")
-    await _give_bio(session, 8060, 500)
+    await create_player(session, tg_id=8090, username="self90")
+    await _give_bio(session, 8090, 500)
 
     ok, msg = await create_hit_contract(
-        session, client_id=8060, target_username="self60", reward_bio=100
+        session, client_id=8090, target_username="self90", reward_bio=100
     )
     assert ok is False
     assert "самого себя" in msg
@@ -197,11 +326,35 @@ async def test_create_hit_contract_self(session: AsyncSession):
 
 async def test_create_hit_contract_not_enough_coins(session: AsyncSession):
     """Placing a hit contract without enough coins fails."""
-    await create_player(session, tg_id=8070, username="broke70")
-    await create_player(session, tg_id=8071, username="tgt71")
+    await create_player(session, tg_id=8100, username="broke100")
+    await create_player(session, tg_id=8101, username="tgt101")
 
     ok, msg = await create_hit_contract(
-        session, client_id=8070, target_username="tgt71", reward_bio=999
+        session, client_id=8100, target_username="tgt101", reward_bio=999
     )
     assert ok is False
     assert "Недостаточно" in msg
+
+
+async def test_cancel_hit_contract_refunds(session: AsyncSession):
+    """Cancelling a hit contract refunds the reward to the client."""
+    await create_player(session, tg_id=8110, username="client110")
+    await create_player(session, tg_id=8111, username="target111")
+    await _give_bio(session, 8110, 500)
+
+    await create_hit_contract(
+        session, client_id=8110, target_username="target111", reward_bio=200
+    )
+
+    result = await session.execute(
+        select(MarketListing).where(MarketListing.seller_id == 8110)
+    )
+    listing = result.scalar_one()
+
+    ok, msg = await cancel_listing(session, user_id=8110, listing_id=listing.id)
+    assert ok is True
+    assert "200" in msg or "наград" in msg
+
+    result = await session.execute(select(User).where(User.tg_id == 8110))
+    user = result.scalar_one()
+    assert user.bio_coins == 500  # full refund

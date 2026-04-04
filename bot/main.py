@@ -21,10 +21,12 @@ from bot.handlers.mutations import router as mutations_router
 from bot.handlers.premium import router as premium_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.rating import router as rating_router
+from bot.handlers.referral import router as referral_router
 from bot.handlers.resources import router as resources_router
 from bot.handlers.shop import router as shop_router
 from bot.handlers.start import router as start_router
 from bot.handlers.text_commands import router as text_commands_router
+from bot.handlers.transfer import router as transfer_router
 from bot.handlers.virus import router as virus_router
 from bot.middlewares.db import DbSessionMiddleware
 from bot.models.base import init_db
@@ -81,6 +83,8 @@ async def main() -> None:
     dp.include_router(events_router)
     dp.include_router(laboratory_router)
     dp.include_router(market_router)
+    dp.include_router(referral_router)
+    dp.include_router(transfer_router)
     # Admin router before text_commands to handle /admin, FSM states, callbacks
     dp.include_router(admin_router)
     # Text commands MUST be last — otherwise may intercept FSM input (e.g. attack username)

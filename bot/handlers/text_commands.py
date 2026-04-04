@@ -17,7 +17,9 @@ from bot.handlers.immunity import _fmt_immunity_stats
 from bot.handlers.info import GUIDE_URL
 from bot.handlers.premium import _fmt_premium_menu
 from bot.handlers.profile import _fmt_profile
+from bot.handlers.referral import _fmt_referral_menu
 from bot.handlers.resources import _fmt_resources
+from bot.handlers.transfer import _fmt_transfer_menu
 from bot.handlers.virus import _fmt_virus_stats
 from bot.keyboards.admin import admin_menu_kb
 from bot.keyboards.alliance import alliance_info_kb, alliance_no_clan_kb
@@ -30,8 +32,10 @@ from bot.keyboards.market import market_menu_kb
 from bot.keyboards.premium import premium_menu_kb
 from bot.keyboards.profile import profile_kb
 from bot.keyboards.rating import rating_menu_kb
+from bot.keyboards.referral import referral_menu_kb
 from bot.keyboards.resources import resources_menu_kb
 from bot.keyboards.shop import shop_menu_kb
+from bot.keyboards.transfer import transfer_menu_kb
 from bot.keyboards.virus import virus_menu_kb
 from bot.services.alliance import get_alliance_info
 from bot.services.donation import EXCHANGE_RATE
@@ -39,7 +43,9 @@ from bot.services.event import get_active_events
 from bot.services.laboratory import get_inventory
 from bot.services.player import get_or_create_player, get_player_profile
 from bot.services.premium import get_premium_info
+from bot.services.referral import get_referral_link, get_referral_stats
 from bot.services.resource import get_balance
+from bot.services.transfer import get_daily_transferred, get_transfer_limit
 from bot.services.upgrade import get_immunity_stats, get_virus_stats
 
 router = Router(name="text_commands")
@@ -72,11 +78,15 @@ _EVENTS_TRIGGERS = {"ивент", "ивенты", "события", "🌍 иве
 
 _LAB_TRIGGERS = {"лаборатория", "лаба", "крафт", "инвентарь", "🔬 лаборатория"}
 
-_MARKET_TRIGGERS = {"рынок", "чёрный рынок", "маркет", "торговля", "🏴‍☠️ чёрный рынок"}
+_MARKET_TRIGGERS = {"биржа", "биобиржа", "маркет", "торговля", "🔬 биобиржа"}
 
 _ADMIN_TRIGGERS = {"админ", "admin", "⚙️ admin", "⚙️ админ"}
 
 _PREMIUM_TRIGGERS = {"премиум", "подписка", "⭐ премиум"}
+
+_REFERRAL_TRIGGERS = {"рефералы", "реферал", "ref", "🤝 рефералы"}
+
+_TRANSFER_TRIGGERS = {"перевод", "передать", "перевести", "💸 передать"}
 
 
 # ---------------------------------------------------------------------------
@@ -296,16 +306,17 @@ async def text_laboratory(message: Message, session: AsyncSession) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Чёрный рынок
+# БиоБиржа
 # ---------------------------------------------------------------------------
 
 
 @router.message(F.text.lower().in_(_MARKET_TRIGGERS))
 async def text_market(message: Message) -> None:
-    """Текстовая команда: показать меню чёрного рынка."""
+    """Текстовая команда: показать меню БиоБиржи."""
     await message.answer(
-        "🏴‍☠️ <b>Чёрный рынок</b>\n\n"
-        "Торгуй ресурсами с другими игроками или размести контракт на заражение.",
+        "🔬 <b>БиоБиржа</b>\n\n"
+        "Торгуй предметами и мутациями с другими игроками\n"
+        "или размести контракт на заражение.",
         reply_markup=market_menu_kb(),
         parse_mode="HTML",
     )
@@ -341,5 +352,43 @@ async def text_admin(message: Message) -> None:
         "Добро пожаловать в панель управления BioWars.\n"
         "Выберите раздел:",
         reply_markup=admin_menu_kb(),
+        parse_mode="HTML",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Рефералы
+# ---------------------------------------------------------------------------
+
+
+@router.message(F.text.lower().in_(_REFERRAL_TRIGGERS))
+async def text_referral(message: Message, session: AsyncSession) -> None:
+    """Текстовая команда: открыть меню реферальной программы."""
+    user_id = message.from_user.id
+    link = await get_referral_link(user_id)
+    stats = await get_referral_stats(session, user_id)
+    has_claimable = any(r["is_available"] for r in stats["rewards"])
+    text = _fmt_referral_menu(stats, link)
+    await message.answer(text, reply_markup=referral_menu_kb(has_claimable), parse_mode="HTML")
+
+
+# ---------------------------------------------------------------------------
+# Передача монет
+# ---------------------------------------------------------------------------
+
+
+@router.message(F.text.lower().in_(_TRANSFER_TRIGGERS))
+async def text_transfer(message: Message, session: AsyncSession) -> None:
+    """Текстовая команда: открыть меню передачи монет."""
+    uid = message.from_user.id
+    daily_limit = await get_transfer_limit(session, uid)
+    daily_used = await get_daily_transferred(session, uid)
+    balance = await get_balance(session, uid)
+    bio_balance = balance.get("bio_coins", 0) if balance else 0
+
+    text = _fmt_transfer_menu(daily_used, daily_limit, bio_balance)
+    await message.answer(
+        text,
+        reply_markup=transfer_menu_kb(daily_used, daily_limit),
         parse_mode="HTML",
     )

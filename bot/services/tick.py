@@ -31,6 +31,7 @@ from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
 from bot.services.premium import format_username
+from bot.services.referral import deactivate_stale_referrals
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +62,11 @@ def _now_utc() -> datetime:
 
 
 def _fmt_user(user: User) -> str:
-    """Return a display name for a User, including premium prefix if active."""
+    """Return a display name for a User, using display_name and premium prefix if active."""
     now = _now_utc()
     is_active = user.premium_until is not None and user.premium_until > now
     base = f"@{user.username}" if user.username else str(user.tg_id)
-    return format_username(base, user.premium_prefix, is_active)
+    return format_username(base, user.premium_prefix, is_active, display_name=user.display_name)
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +213,11 @@ async def start_scheduler(bot) -> None:  # bot: aiogram.Bot
         async with AsyncSessionFactory() as session:
             try:
                 notifications = await process_infection_tick(session)
+                stale_count = await deactivate_stale_referrals(session)
+                if stale_count:
+                    logger.info(
+                        "Scheduler: deactivated %d stale referral(s).", stale_count
+                    )
                 await session.commit()
             except Exception:
                 await session.rollback()

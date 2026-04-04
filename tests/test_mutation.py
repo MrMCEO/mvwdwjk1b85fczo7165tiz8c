@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.models.mutation import Mutation, MutationRarity, MutationType
 from bot.services.mutation import (
     MUTATION_ROLL_CHANCE,
+    activate_mutation,
     expire_mutations,
     get_active_mutations,
+    get_inventory_mutations,
     get_mutation_bonus,
     roll_mutation,
 )
@@ -31,7 +33,8 @@ async def test_roll_mutation_returns_mutation_when_lucky(session: AsyncSession):
     assert result is not None
     assert isinstance(result, Mutation)
     assert result.owner_id == 5001
-    assert result.is_active is True
+    # TOXIC_SPIKE is a buff → goes into inventory (is_active=False) until manually activated
+    assert result.is_active is False
     assert result.mutation_type == MutationType.TOXIC_SPIKE
 
 
@@ -172,3 +175,103 @@ async def test_mutation_bonus_zero_for_wrong_type(session: AsyncSession):
 
     bonus = await get_mutation_bonus(session, user_id=5008, bonus_type="attack")
     assert bonus == 0.0
+
+
+async def test_debuff_mutation_applied_immediately(session: AsyncSession):
+    """roll_mutation applies debuffs immediately (is_active=True)."""
+    await create_player(session, tg_id=5009, username="mutant9")
+
+    with patch("bot.services.mutation.random.random", return_value=0.0), \
+         patch("bot.services.mutation.random.choices", return_value=[MutationRarity.COMMON]), \
+         patch("bot.services.mutation.random.choice", return_value=MutationType.UNSTABLE_CODE):
+        result = await roll_mutation(session, user_id=5009)
+
+    assert result is not None
+    # UNSTABLE_CODE is a debuff → applied immediately
+    assert result.is_active is True
+    assert result.mutation_type == MutationType.UNSTABLE_CODE
+
+
+async def test_get_inventory_mutations_returns_unactivated(session: AsyncSession):
+    """get_inventory_mutations returns only is_active=False, is_used=False mutations."""
+    await create_player(session, tg_id=5010, username="mutant10")
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    # Inventory mutation (buff, not yet activated)
+    inv = Mutation(
+        owner_id=5010,
+        mutation_type=MutationType.TOXIC_SPIKE,
+        rarity=MutationRarity.COMMON,
+        effect_value=0.30,
+        duration_hours=6.0,
+        activated_at=now,
+        is_active=False,
+        is_used=False,
+    )
+    # Active mutation (not in inventory)
+    active = Mutation(
+        owner_id=5010,
+        mutation_type=MutationType.RAPID_SPREAD,
+        rarity=MutationRarity.UNCOMMON,
+        effect_value=0.50,
+        duration_hours=4.0,
+        activated_at=now,
+        is_active=True,
+        is_used=False,
+    )
+    session.add_all([inv, active])
+    await session.flush()
+
+    inventory = await get_inventory_mutations(session, user_id=5010)
+    assert len(inventory) == 1
+    assert inventory[0].mutation_type == MutationType.TOXIC_SPIKE
+
+
+async def test_activate_mutation_from_inventory(session: AsyncSession):
+    """activate_mutation activates a buff from inventory."""
+    await create_player(session, tg_id=5011, username="mutant11")
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    m = Mutation(
+        owner_id=5011,
+        mutation_type=MutationType.BIO_MAGNET,
+        rarity=MutationRarity.UNCOMMON,
+        effect_value=1.0,
+        duration_hours=2.0,
+        activated_at=now,
+        is_active=False,
+        is_used=False,
+    )
+    session.add(m)
+    await session.flush()
+
+    ok, msg = await activate_mutation(session, user_id=5011, mutation_id=m.id)
+    assert ok is True
+    assert "активирована" in msg.lower() or "Мутация" in msg
+
+    await session.refresh(m)
+    assert m.is_active is True
+
+
+async def test_activate_mutation_wrong_owner(session: AsyncSession):
+    """Cannot activate a mutation owned by another player."""
+    await create_player(session, tg_id=5012, username="mutant12")
+    await create_player(session, tg_id=5013, username="mutant13")
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    m = Mutation(
+        owner_id=5012,
+        mutation_type=MutationType.TOXIC_SPIKE,
+        rarity=MutationRarity.COMMON,
+        effect_value=0.30,
+        duration_hours=6.0,
+        activated_at=now,
+        is_active=False,
+        is_used=False,
+    )
+    session.add(m)
+    await session.flush()
+
+    ok, msg = await activate_mutation(session, user_id=5013, mutation_id=m.id)
+    assert ok is False
+    assert "не найдена" in msg.lower() or "активирована" in msg

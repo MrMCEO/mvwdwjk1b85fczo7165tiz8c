@@ -8,10 +8,12 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from bot.config import get_settings
+from bot.handlers.alliance import router as alliance_router
 from bot.handlers.attack import router as attack_router
 from bot.handlers.immunity import router as immunity_router
 from bot.handlers.info import router as info_router
 from bot.handlers.menu import router as menu_router
+from bot.handlers.mutations import router as mutations_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.rating import router as rating_router
 from bot.handlers.resources import router as resources_router
@@ -68,6 +70,8 @@ async def main() -> None:
     dp.include_router(shop_router)
     dp.include_router(profile_router)
     dp.include_router(rating_router)
+    dp.include_router(mutations_router)
+    dp.include_router(alliance_router)
     # Text commands MUST be last — otherwise may intercept FSM input (e.g. attack username)
     dp.include_router(text_commands_router)
 

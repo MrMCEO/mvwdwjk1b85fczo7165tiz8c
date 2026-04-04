@@ -30,14 +30,14 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_VIRUS_NAME = "Unnamed Virus"
 DEFAULT_ATTACK_POWER = 10
-DEFAULT_SPREAD_RATE = 0.1
+DEFAULT_SPREAD_RATE = 1.0   # balanced: was 0.1, made attack_score=1 vs defense=10 (9% chance). Now 10 vs ~10.5 (~48%)
 DEFAULT_MUTATION_POINTS = 0
 DEFAULT_VIRUS_LEVEL = 1
 
 DEFAULT_IMMUNITY_LEVEL = 1
 DEFAULT_RESISTANCE = 10
-DEFAULT_DETECTION_POWER = 0.1
-DEFAULT_RECOVERY_SPEED = 0.1
+DEFAULT_DETECTION_POWER = 0.1   # contributes 0.1*5=0.5 to defense_score at lvl0; grows with DETECTION upgrades
+DEFAULT_RECOVERY_SPEED = 0.03   # balanced: was 0.1 (15% auto-cure with base 5%). Now 8% base auto-cure, ~12 ticks avg duration
 
 # ---------------------------------------------------------------------------
 # Helpers

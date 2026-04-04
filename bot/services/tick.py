@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from bot.models.base import AsyncSessionFactory
+from bot.models.immunity import Immunity, ImmunityBranch
 from bot.models.infection import Infection
 from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
@@ -38,10 +39,15 @@ logger = logging.getLogger(__name__)
 
 TICK_INTERVAL_MINUTES: int = 60
 
-# Attacker receives this fraction of stolen bio_coins
-ATTACKER_SHARE: float = 0.70
+# Attacker receives this fraction of stolen bio_coins.
+# Lowered from 70% to 50%: attacking is still profitable but not a
+# gold mine. Victim loses 5/tick, attacker gains 2.5/tick at base.
+ATTACKER_SHARE: float = 0.50
 
-# Base auto-cure chance per tick (5%)
+# Base auto-cure chance per tick (5%). With default recovery_speed=0.03
+# total newbie chance = 8% per tick. Expected infection: ~12 ticks (12hrs).
+# Total expected loss: 5 * 12 = 60 bio_coins. Cure cost: 5 * 8 = 40.
+# So manual cure IS worth it — good decision point for the player.
 BASE_CURE_CHANCE: float = 0.05
 
 # ---------------------------------------------------------------------------
@@ -69,13 +75,15 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
     """
     notifications: list[dict] = []
 
-    # Load all active infections (with attacker/victim users and victim immunity eager-loaded)
+    # Load all active infections (with attacker/victim users, victim immunity + upgrades)
     result = await session.execute(
         select(Infection)
         .where(Infection.is_active == True)  # noqa: E712
         .options(
             selectinload(Infection.attacker),
-            selectinload(Infection.victim).selectinload(User.immunity),
+            selectinload(Infection.victim)
+            .selectinload(User.immunity)
+            .selectinload(Immunity.upgrades),  # needed for REGENERATION effect
         )
     )
     infections: list[Infection] = list(result.scalars().all())
@@ -137,10 +145,19 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                 ),
             })
 
-        # --- Auto-cure roll --- use eagerly-loaded immunity (avoids N+1 query)
+        # --- Auto-cure roll ---
+        # Base: 5% + recovery_speed (0.03 default) = 8% for newbie.
+        # REGENERATION upgrade adds +0.02/level to cure chance.
+        # Lvl10 regen: 5% + 3% + 20% = 28% per tick (~3.6 tick avg duration).
         recovery_speed = victim.immunity.recovery_speed if victim.immunity else 0.0
-        cure_chance = BASE_CURE_CHANCE + recovery_speed
-        cure_chance = max(0.0, min(1.0, cure_chance))
+        regen_bonus = 0.0
+        if victim.immunity and victim.immunity.upgrades:
+            for u in victim.immunity.upgrades:
+                if u.branch == ImmunityBranch.REGENERATION and u.level > 0:
+                    regen_bonus = u.effect_value
+                    break
+        cure_chance = BASE_CURE_CHANCE + recovery_speed + regen_bonus
+        cure_chance = max(0.0, min(0.80, cure_chance))  # cap at 80% — infection should always have some duration
 
         if random.random() < cure_chance:
             inf.is_active = False

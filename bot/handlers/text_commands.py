@@ -16,6 +16,7 @@ from bot.handlers.info import GUIDE_URL
 from bot.handlers.profile import _fmt_profile
 from bot.handlers.resources import _fmt_resources
 from bot.handlers.virus import _fmt_virus_stats
+from bot.keyboards.alliance import alliance_info_kb, alliance_no_clan_kb
 from bot.keyboards.attack import attack_menu_kb
 from bot.keyboards.immunity import immunity_menu_kb
 from bot.keyboards.main import main_menu_kb
@@ -24,6 +25,7 @@ from bot.keyboards.rating import rating_menu_kb
 from bot.keyboards.resources import resources_menu_kb
 from bot.keyboards.shop import shop_menu_kb
 from bot.keyboards.virus import virus_menu_kb
+from bot.services.alliance import get_alliance_info
 from bot.services.donation import EXCHANGE_RATE
 from bot.services.player import get_or_create_player, get_player_profile
 from bot.services.resource import get_balance
@@ -52,6 +54,8 @@ _SHOP_TRIGGERS = {"магазин", "шоп", "донат", "💎 магазин
 _INFO_TRIGGERS = {"инфо", "помощь", "гайд", "как играть"}
 
 _PROFILE_TRIGGERS = {"мой профиль", "📊 мой профиль"}
+
+_ALLIANCE_TRIGGERS = {"альянс", "клан", "🏰 альянс"}
 
 
 # ---------------------------------------------------------------------------
@@ -195,3 +199,30 @@ async def text_info(message: Message) -> None:
         parse_mode="HTML",
         disable_web_page_preview=False,
     )
+
+
+# ---------------------------------------------------------------------------
+# Альянс
+# ---------------------------------------------------------------------------
+
+
+@router.message(F.text.lower().in_(_ALLIANCE_TRIGGERS))
+async def text_alliance(message: Message, session: AsyncSession) -> None:
+    """Текстовая команда: показать меню альянса."""
+    info = await get_alliance_info(session, message.from_user.id)
+    if info is None:
+        await message.answer(
+            "🏰 <b>Альянсы</b>\n\n"
+            "Ты не состоишь ни в каком альянсе.\n\n"
+            "Создай свой или вступи в существующий!",
+            reply_markup=alliance_no_clan_kb(),
+            parse_mode="HTML",
+        )
+    else:
+        from bot.handlers.alliance import _fmt_alliance_info
+        text = _fmt_alliance_info(info)
+        await message.answer(
+            text,
+            reply_markup=alliance_info_kb(info["user_role"]),
+            parse_mode="HTML",
+        )

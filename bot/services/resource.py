@@ -35,12 +35,12 @@ from bot.models.user import User
 MINING_COOLDOWN = timedelta(hours=1)
 DAILY_COOLDOWN = timedelta(hours=24)
 
-MINING_MIN = 10
+MINING_MIN = 15   # balanced: ~32 avg/hr, 1st upgrade (~80 coins) in ~2.5hrs
 MINING_MAX = 50
 
 DAILY_BASE = 100
-DAILY_STREAK_BONUS = 0.10   # +10 % per consecutive day
-DAILY_STREAK_MAX = 7        # cap at day 7 → +70 %
+DAILY_STREAK_BONUS = 0.15   # +15% per consecutive day (was 10%); rewards loyal players more
+DAILY_STREAK_MAX = 7        # cap at day 7 → +90 %
 
 # ---------------------------------------------------------------------------
 # Internal helpers

@@ -26,7 +26,7 @@ class Immunity(Base):
     level: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     resistance: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
     detection_power: Mapped[float] = mapped_column(Float, default=0.1, server_default="0.1")
-    recovery_speed: Mapped[float] = mapped_column(Float, default=0.1, server_default="0.1")
+    recovery_speed: Mapped[float] = mapped_column(Float, default=0.03, server_default="0.03")  # balanced: was 0.1, too high base auto-cure
 
     # Relationships
     owner: Mapped["User"] = relationship("User", back_populates="immunity")

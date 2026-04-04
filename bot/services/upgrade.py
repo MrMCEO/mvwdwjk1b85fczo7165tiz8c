@@ -30,19 +30,30 @@ from bot.models.virus import Virus, VirusBranch, VirusUpgrade
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Maximum level a single branch can be upgraded to.
-MAX_UPGRADE_LEVEL: int = 50
-
 UPGRADE_CONFIG: dict[str, dict[str, dict]] = {
     "virus": {
-        "LETHALITY": {"base_cost": 100, "multiplier": 1.5, "base_effect": 5.0},
-        "CONTAGION": {"base_cost": 100, "multiplier": 1.5, "base_effect": 0.05},
-        "STEALTH":   {"base_cost": 120, "multiplier": 1.6, "base_effect": 0.1},
+        # LETHALITY: +2 damage_per_tick per level. Lvl10 = +20 dmg (total 25 with base 5).
+        # Old 5.0 was OP — lvl10 gave +50 dmg, wiping daily income in 5hrs.
+        "LETHALITY": {"base_cost": 80, "multiplier": 1.25, "base_effect": 2.0},
+        # CONTAGION: +0.08 multiplier to attack_score per level. Lvl10 = +80% attack.
+        # Old 0.05 was too weak vs BARRIER. Now meaningful but not dominant.
+        "CONTAGION": {"base_cost": 80, "multiplier": 1.25, "base_effect": 0.08},
+        # STEALTH: -0.05 effective detection per level. Now works across 20 lvls.
+        # Old 0.1 fully negated detection at lvl1 (detection default was 0.1). Fixed.
+        "STEALTH":   {"base_cost": 90, "multiplier": 1.25, "base_effect": 0.05},
     },
     "immunity": {
-        "BARRIER":       {"base_cost": 100, "multiplier": 1.5, "base_effect": 5.0},
-        "DETECTION":     {"base_cost": 110, "multiplier": 1.5, "base_effect": 0.1},
-        "REGENERATION":  {"base_cost": 120, "multiplier": 1.6, "base_effect": 0.05},
+        # BARRIER: +3 flat defense_score per level (ADDITIVE, not multiplicative).
+        # Old 5.0 was multiplied by resistance, giving 510 defense at lvl10 — game-breaking.
+        # Now lvl10 = +30 defense. See combat.py formula change.
+        "BARRIER":       {"base_cost": 80, "multiplier": 1.25, "base_effect": 3.0},
+        # DETECTION: +0.05 detection_power per level. Lvl10 = +0.5 detection.
+        # Old 0.1 was either too much (overshadowed by stealth) or negligible in formula.
+        "DETECTION":     {"base_cost": 80, "multiplier": 1.25, "base_effect": 0.05},
+        # REGENERATION: +0.02 auto-cure chance per level. Lvl10 = +20% auto-cure.
+        # Old 0.05 subtracted from damage — at lvl10 only -0.5 dmg, useless.
+        # Now directly boosts recovery_speed used in auto-cure rolls.
+        "REGENERATION":  {"base_cost": 90, "multiplier": 1.25, "base_effect": 0.02},
     },
 }
 
@@ -172,11 +183,6 @@ async def upgrade_virus_branch(
 
     current_level = upgrade.level if upgrade is not None else 0
 
-    if current_level >= MAX_UPGRADE_LEVEL:
-        return False, (
-            f"Ветка уже достигла максимального уровня ({MAX_UPGRADE_LEVEL})."
-        )
-
     cfg = UPGRADE_CONFIG["virus"][branch_key]
     cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], current_level)
 
@@ -254,11 +260,6 @@ async def upgrade_immunity_branch(
     upgrade = await _get_immunity_upgrade(session, immunity.id, immunity_branch_enum)
 
     current_level = upgrade.level if upgrade is not None else 0
-
-    if current_level >= MAX_UPGRADE_LEVEL:
-        return False, (
-            f"Ветка уже достигла максимального уровня ({MAX_UPGRADE_LEVEL})."
-        )
 
     cfg = UPGRADE_CONFIG["immunity"][branch_key]
     cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], current_level)
@@ -338,18 +339,12 @@ async def get_virus_stats(session: AsyncSession, user_id: int) -> dict:
         row = upgrades_by_branch.get(branch_key)
         current_level = row.level if row is not None else 0
         effect_value = row.effect_value if row is not None else 0.0
-        at_max = current_level >= MAX_UPGRADE_LEVEL
-        next_cost = (
-            None
-            if at_max
-            else calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], current_level)
-        )
+        next_cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], current_level)
         upgrades[branch_key] = {
             "name": _VIRUS_BRANCH_NAMES[branch_key],
             "level": current_level,
             "effect_value": effect_value,
             "next_cost": next_cost,
-            "max_level": MAX_UPGRADE_LEVEL,
         }
 
     return {
@@ -392,18 +387,12 @@ async def get_immunity_stats(session: AsyncSession, user_id: int) -> dict:
         row = upgrades_by_branch.get(branch_key)
         current_level = row.level if row is not None else 0
         effect_value = row.effect_value if row is not None else 0.0
-        at_max = current_level >= MAX_UPGRADE_LEVEL
-        next_cost = (
-            None
-            if at_max
-            else calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], current_level)
-        )
+        next_cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], current_level)
         upgrades[branch_key] = {
             "name": _IMMUNITY_BRANCH_NAMES[branch_key],
             "level": current_level,
             "effect_value": effect_value,
             "next_cost": next_cost,
-            "max_level": MAX_UPGRADE_LEVEL,
         }
 
     return {

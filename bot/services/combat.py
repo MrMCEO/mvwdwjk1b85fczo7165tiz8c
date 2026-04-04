@@ -34,11 +34,13 @@ from bot.models.virus import Virus, VirusBranch, VirusUpgrade
 
 ATTACK_COOLDOWN = timedelta(minutes=30)
 
-# Base damage per tick before lethality / regen adjustments
+# Base damage per tick before lethality adjustments
 BASE_DAMAGE_PER_TICK: float = 5.0
 
-# Cure cost = damage_per_tick * this multiplier (rounded up)
-CURE_COST_MULTIPLIER: float = 10.0
+# Cure cost = damage_per_tick * this multiplier (rounded up).
+# Lowered from 10 to 8: at base dmg 5, cure = 40 coins. Comparable to expected loss
+# of waiting (~5 dmg * ~5 ticks avg = 25), so manual cure is worth it when urgent.
+CURE_COST_MULTIPLIER: float = 8.0
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -176,29 +178,34 @@ async def attack_player(
         return False, "У жертвы ещё нет иммунитета."
 
     # --- Attack score ---
-    # Base: attack_power * spread_rate
+    # Base: attack_power (default 10). spread_rate is now a direct multiplier (default 1.0).
+    # Formula: attack_power * spread_rate * (1 + contagion_bonus)
     attack_score: float = virus.attack_power * virus.spread_rate
 
-    # CONTAGION bonus: multiplies attack score
+    # CONTAGION bonus: multiplies attack score (+8% per level)
     contagion_effect = _upgrade_effect(virus_upgrades, VirusBranch.CONTAGION)
     attack_score *= 1.0 + contagion_effect
 
-    # STEALTH reduces victim's effective detection_power (used for defense_score calc)
+    # STEALTH reduces victim's effective detection_power
     stealth_effect = _upgrade_effect(virus_upgrades, VirusBranch.STEALTH)
-    effective_detection = max(0.0, immunity.detection_power - stealth_effect)
 
     # --- Defense score ---
-    # Base: resistance * (1 + BARRIER effect_value)
+    # Base: resistance (default 10). BARRIER adds flat defense (not multiplicative!).
+    # Old formula resistance * (1 + barrier) was exponentially broken at high levels.
     barrier_effect = _upgrade_effect(immunity_upgrades, ImmunityBranch.BARRIER)
-    defense_score: float = immunity.resistance * (1.0 + barrier_effect)
+    defense_score: float = immunity.resistance + barrier_effect  # balanced: additive, not multiplicative
 
-    # Detection adds a small bonus to defense when the attacker is not stealthed out
-    defense_score += effective_detection * immunity.resistance * 0.1
+    # Detection adds direct bonus to defense when attacker is not fully stealthed.
+    # Scaled by 5.0 so detection upgrades (+0.05/lvl) are meaningful: lvl10 = +2.5 defense.
+    detection_effect = _upgrade_effect(immunity_upgrades, ImmunityBranch.DETECTION)
+    effective_detection = max(0.0, (immunity.detection_power + detection_effect) - stealth_effect)
+    defense_score += effective_detection * 5.0  # balanced: detection matters but not dominant
 
     # --- Infection probability ---
+    # With defaults: attack=10, defense=10+(0.1*5)=10.5, chance=10/20.5=48.8% — close to target 45%
     total = attack_score + defense_score
     chance: float = attack_score / total if total > 0 else 0.0
-    chance = max(0.0, min(1.0, chance))
+    chance = max(0.05, min(0.95, chance))  # floor 5%, cap 95% — always a small chance either way
 
     roll = random.random()
     success = roll < chance
@@ -211,12 +218,14 @@ async def attack_player(
         )
 
     # --- Calculate damage_per_tick ---
-    # Lethality increases base damage
+    # Lethality increases base damage (+2.0 per level; lvl10 = 25 total)
     lethality_effect = _upgrade_effect(virus_upgrades, VirusBranch.LETHALITY)
-    # Regeneration reduces incoming damage
-    regen_effect = _upgrade_effect(immunity_upgrades, ImmunityBranch.REGENERATION)
+    # Regeneration no longer reduces damage here — it boosts auto-cure chance in tick.py.
+    # This makes REGEN and BARRIER serve different roles:
+    #   BARRIER = reduce chance of getting infected (prevention)
+    #   REGEN   = recover faster once infected (cure speed)
 
-    damage_per_tick = max(1.0, BASE_DAMAGE_PER_TICK + lethality_effect - regen_effect)
+    damage_per_tick = max(1.0, BASE_DAMAGE_PER_TICK + lethality_effect)
 
     # --- Create Infection ---
     infection = Infection(

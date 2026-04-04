@@ -59,6 +59,7 @@ async def get_top_virus_level(session: AsyncSession, limit: int = 10) -> list[di
             User.username.label("username"),
             User.premium_until.label("premium_until"),
             Virus.name.label("virus_name"),
+            Virus.name_entities_json.label("virus_name_entities"),
             Virus.level.label("level"),
         )
         .join(Virus, Virus.owner_id == User.tg_id)
@@ -72,6 +73,7 @@ async def get_top_virus_level(session: AsyncSession, limit: int = 10) -> list[di
             "user_id": row.user_id,
             "username": row.username or str(row.user_id),
             "virus_name": row.virus_name,
+            "virus_name_entities": row.virus_name_entities,
             "level": row.level,
             "premium_until": row.premium_until,
         }

@@ -4,7 +4,7 @@ from aiogram.types import Message
 
 router = Router(name="info")
 
-GUIDE_URL = "https://telegra.ph/BioWars--Polnyj-gajd-04-04"
+GUIDE_URL = "https://telegra.ph/BioWars--Polnyj-gajd-po-igre-04-04"
 
 
 @router.message(Command("info"))

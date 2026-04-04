@@ -106,6 +106,7 @@ async def lookup_player(session: AsyncSession, identifier: str) -> dict | None:
         upgrades = {u.branch.value: {"level": u.level, "effect": u.effect_value} for u in v.upgrades}
         virus_data = {
             "name": v.name,
+            "name_entities_json": v.name_entities_json,
             "level": v.level,
             "attack_power": v.attack_power,
             "spread_rate": v.spread_rate,

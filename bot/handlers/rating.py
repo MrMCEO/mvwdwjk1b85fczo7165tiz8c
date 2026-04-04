@@ -11,6 +11,7 @@ from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.rating import rating_menu_kb, rating_type_kb
+from bot.utils.emoji import render_virus_name
 from bot.services.rating import (
     get_top_immunity_level,
     get_top_infections,
@@ -89,7 +90,10 @@ async def cb_rating_virus(callback: CallbackQuery, session: AsyncSession) -> Non
         for i, row in enumerate(rows, start=1):
             username = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
             badge = _premium_badge(row.get("premium_until"))
-            virus_name = row["virus_name"] or "Безымянный вирус"
+            virus_name = render_virus_name(
+                row["virus_name"] or "Безымянный вирус",
+                row.get("virus_name_entities"),
+            )
             lines.append(
                 f"{_place(i)} {username}{badge} — <b>ур. {row['level']}</b>"
                 f" (<i>{virus_name}</i>)"

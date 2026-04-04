@@ -22,6 +22,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.laboratory import lab_craft_kb, lab_inventory_kb, lab_menu_kb
+from bot.utils.emoji import render_virus_name
 from bot.models.item import ITEM_CONFIG, Item, ItemType
 from bot.services.laboratory import (
     craft_item,
@@ -263,7 +264,7 @@ async def fsm_spy_target(
         f"🧫 BioCoins: <b>{data['bio_coins']:,}</b>\n"
         f"🦠 Заражений: <b>{data['active_infections']}</b> (входящих)\n\n"
         f"🦠 <b>Вирус</b>\n"
-        f"   Имя: {escape(virus.get('name', '—'))}\n"
+        f"   Имя: {render_virus_name(virus.get('name', '—'), virus.get('name_entities_json'))}\n"
         f"   Уровень: {virus.get('level', '—')}\n"
         f"   Атака: {virus.get('attack_power', '—')}\n"
         f"   Заразность: {virus.get('spread_rate', '—')}\n"

@@ -394,6 +394,7 @@ async def spy_on_player(
             upgrades[u.branch.value] = {"level": u.level, "effect_value": u.effect_value}
         virus_data = {
             "name": v.name,
+            "name_entities_json": v.name_entities_json,
             "level": v.level,
             "attack_power": v.attack_power,
             "spread_rate": v.spread_rate,

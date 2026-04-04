@@ -78,10 +78,10 @@ async def craft_item(
     if user.bio_coins < cost:
         shortage = cost - user.bio_coins
         return False, (
-            f"Недостаточно bio_coins!\n"
-            f"Нужно: <b>{cost}</b> 🧫\n"
-            f"У тебя: <b>{user.bio_coins}</b> 🧫\n"
-            f"Не хватает: <b>{shortage}</b> 🧫"
+            f"Недостаточно 🧫 BioCoins!\n"
+            f"Нужно: <b>{cost}</b> 🧫 BioCoins\n"
+            f"У тебя: <b>{user.bio_coins}</b> 🧫 BioCoins\n"
+            f"Не хватает: <b>{shortage}</b> 🧫 BioCoins"
         )
 
     # Списать монеты
@@ -107,8 +107,8 @@ async def craft_item(
 
     return True, (
         f"{emoji} <b>{name}</b> успешно скрафчен!\n"
-        f"Потрачено: <b>{cost}</b> 🧫\n"
-        f"Баланс: <b>{user.bio_coins}</b> 🧫\n\n"
+        f"Потрачено: <b>{cost}</b> 🧫 BioCoins\n"
+        f"Баланс: <b>{user.bio_coins}</b> 🧫 BioCoins\n\n"
         "Предмет добавлен в инвентарь."
     )
 

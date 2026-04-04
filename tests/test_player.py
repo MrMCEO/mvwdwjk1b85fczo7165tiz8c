@@ -68,23 +68,24 @@ async def test_create_player(session: AsyncSession):
 
 async def test_get_or_create_player_creates_new(session: AsyncSession):
     """get_or_create_player creates a new user when one does not exist."""
-    user = await get_or_create_player(session, tg_id=1002, username="bob")
+    user, is_new = await get_or_create_player(session, tg_id=1002, username="bob")
     assert user.tg_id == 1002
     assert user.username == "bob"
+    assert is_new is True
 
 
 async def test_get_or_create_player_returns_existing(session: AsyncSession):
     """get_or_create_player returns the same user on repeated calls."""
     await create_player(session, tg_id=1003, username="carol")
-    user_a = await get_or_create_player(session, tg_id=1003, username="carol")
-    user_b = await get_or_create_player(session, tg_id=1003, username="carol")
+    user_a, _ = await get_or_create_player(session, tg_id=1003, username="carol")
+    user_b, _ = await get_or_create_player(session, tg_id=1003, username="carol")
     assert user_a.tg_id == user_b.tg_id == 1003
 
 
 async def test_get_or_create_player_updates_username(session: AsyncSession):
     """get_or_create_player syncs username when it changes."""
     await create_player(session, tg_id=1004, username="dave_old")
-    user = await get_or_create_player(session, tg_id=1004, username="dave_new")
+    user, _ = await get_or_create_player(session, tg_id=1004, username="dave_new")
     assert user.username == "dave_new"
 
 

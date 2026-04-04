@@ -138,9 +138,9 @@ async def create_alliance(
 
     if user.bio_coins < ALLIANCE_CREATE_COST:
         return False, (
-            f"❌ Недостаточно bio_coins для создания альянса.\n"
-            f"Требуется: {ALLIANCE_CREATE_COST} 🧫\n"
-            f"У тебя: {user.bio_coins} 🧫"
+            f"❌ Недостаточно 🧫 BioCoins для создания альянса.\n"
+            f"Требуется: {ALLIANCE_CREATE_COST} 🧫 BioCoins\n"
+            f"У тебя: {user.bio_coins} 🧫 BioCoins"
         )
 
     user.bio_coins -= ALLIANCE_CREATE_COST
@@ -168,7 +168,7 @@ async def create_alliance(
 
     return True, (
         f"✅ Альянс <b>[{tag}] {name}</b> успешно создан!\n"
-        f"Потрачено: {ALLIANCE_CREATE_COST} bio_coins 🧫\n\n"
+        f"Потрачено: {ALLIANCE_CREATE_COST} 🧫 BioCoins\n\n"
         "Ты становишься лидером альянса 👑"
     )
 

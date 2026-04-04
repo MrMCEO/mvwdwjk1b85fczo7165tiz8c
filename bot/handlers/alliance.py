@@ -130,7 +130,7 @@ async def cb_alliance_create(callback: CallbackQuery, state: FSMContext) -> None
     await state.set_state(AllianceCreateStates.waiting_for_name)
     await callback.message.edit_text(
         f"🏰 <b>Создание альянса</b>\n\n"
-        f"Стоимость создания: <b>{ALLIANCE_CREATE_COST} bio_coins</b> 🧫\n\n"
+        f"Стоимость создания: <b>{ALLIANCE_CREATE_COST} 🧫 BioCoins</b>\n\n"
         "Введи название альянса (3–32 символа).\n"
         "Допустимы буквы (рус/лат), цифры, пробел, _ и -:\n\n"
         "Или нажми «Назад» для отмены:",
@@ -182,7 +182,7 @@ async def msg_create_tag(message: Message, state: FSMContext) -> None:
         f"🏰 <b>Подтверждение создания альянса</b>\n\n"
         f"Название: <b>{escape(name)}</b>\n"
         f"Тег: <b>[{escape(tag.upper())}]</b>\n"
-        f"Стоимость: <b>{ALLIANCE_CREATE_COST} bio_coins</b> 🧫\n\n"
+        f"Стоимость: <b>{ALLIANCE_CREATE_COST} 🧫 BioCoins</b>\n\n"
         "Создать альянс?",
         reply_markup=confirm_cancel_kb("alliance_create_confirm", "alliance_menu"),
         parse_mode="HTML",
@@ -637,9 +637,11 @@ async def cb_alliance_join(
         await callback.answer("❌ Неверный ID альянса.", show_alert=True)
         return
 
-    # Check user not already in an alliance
+    # Check user not already in an alliance (with lock to prevent double-join race)
     existing_result = await session.execute(
-        select(AllianceMember).where(AllianceMember.user_id == callback.from_user.id)
+        select(AllianceMember)
+        .where(AllianceMember.user_id == callback.from_user.id)
+        .with_for_update()
     )
     if existing_result.scalar_one_or_none() is not None:
         await callback.answer(
@@ -647,16 +649,16 @@ async def cb_alliance_join(
         )
         return
 
-    # Load target alliance
+    # Load target alliance with lock to check capacity atomically
     alliance_result = await session.execute(
-        select(Alliance).where(Alliance.id == alliance_id)
+        select(Alliance).where(Alliance.id == alliance_id).with_for_update()
     )
     alliance = alliance_result.scalar_one_or_none()
     if alliance is None:
         await callback.answer("❌ Альянс не найден.", show_alert=True)
         return
 
-    # Check capacity
+    # Check capacity (re-count under lock)
     count_result = await session.execute(
         select(func.count(AllianceMember.id)).where(
             AllianceMember.alliance_id == alliance_id

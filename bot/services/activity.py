@@ -22,8 +22,8 @@ _REASON_LABELS: dict[str, str] = {
 }
 
 _CURRENCY_LABELS: dict[str, str] = {
-    "BIO_COINS": "🧫 bio_coins",
-    "PREMIUM_COINS": "💎 premium",
+    "BIO_COINS": "🧫 BioCoins",
+    "PREMIUM_COINS": "💎 PremiumCoins",
 }
 
 

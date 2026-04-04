@@ -31,6 +31,7 @@ def virus_menu_kb(upgrades: dict | None = None) -> InlineKeyboardMarkup:
         else:
             btn_text = label
         builder.button(text=btn_text, callback_data=f"upg_v_{branch_key[:3]}")
+    builder.button(text="✏️ Назвать вирус", callback_data="rename_virus")
     builder.button(text="◀️ Назад", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()

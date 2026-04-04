@@ -134,7 +134,7 @@ async def mine_resources(
     session.add(tx)
     await session.flush()
 
-    return amount, f"Добыто {amount} bio_coins! 🧫 Баланс: {user.bio_coins} bio_coins."
+    return amount, f"Добыто {amount} 🧫 BioCoins! Баланс: {user.bio_coins} 🧫 BioCoins."
 
 
 async def claim_daily_bonus(
@@ -205,8 +205,8 @@ async def claim_daily_bonus(
         else ""
     )
     return amount, (
-        f"Ежедневный бонус получен! +{amount} bio_coins{streak_msg}. "
-        f"Баланс: {user.bio_coins} bio_coins."
+        f"Ежедневный бонус получен! +{amount} 🧫 BioCoins{streak_msg}. "
+        f"Баланс: {user.bio_coins} 🧫 BioCoins."
     )
 
 

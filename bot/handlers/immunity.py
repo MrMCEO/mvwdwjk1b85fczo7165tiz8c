@@ -41,7 +41,7 @@ def _fmt_immunity_stats(data: dict) -> str:
     for branch_key, info in upgrades.items():
         icon = icons.get(branch_key, "•")
         next_cost = info.get("next_cost")
-        cost_text = "МАКС" if next_cost is None else f"→ след. уровень <b>{next_cost}</b> bio"
+        cost_text = "МАКС" if next_cost is None else f"→ след. уровень <b>{next_cost}</b> 🧫"
         lines.append(
             f"  {icon} {info['name']}: ур. <b>{info['level']}</b>  "
             f"(эффект {info['effect_value']:.2f})  "

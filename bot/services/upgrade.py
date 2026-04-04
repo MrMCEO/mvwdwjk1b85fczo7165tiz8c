@@ -188,7 +188,7 @@ async def upgrade_virus_branch(
 
     if user.bio_coins < cost:
         return False, (
-            f"Недостаточно bio_coins. Нужно {cost}, у тебя {user.bio_coins}."
+            f"Недостаточно 🧫 BioCoins. Нужно {cost}, у тебя {user.bio_coins}."
         )
 
     # Deduct coins
@@ -224,7 +224,7 @@ async def upgrade_virus_branch(
     return True, (
         f"Ветка «{branch_name}» прокачана до уровня {new_level}! "
         f"Эффект: {upgrade.effect_value:.2f}. "
-        f"Потрачено: {cost} bio_coins. Следующий уровень: {next_cost} bio_coins."
+        f"Потрачено: {cost} 🧫 BioCoins. Следующий уровень: {next_cost} 🧫 BioCoins."
     )
 
 
@@ -266,7 +266,7 @@ async def upgrade_immunity_branch(
 
     if user.bio_coins < cost:
         return False, (
-            f"Недостаточно bio_coins. Нужно {cost}, у тебя {user.bio_coins}."
+            f"Недостаточно 🧫 BioCoins. Нужно {cost}, у тебя {user.bio_coins}."
         )
 
     # Deduct coins
@@ -302,7 +302,7 @@ async def upgrade_immunity_branch(
     return True, (
         f"Ветка «{branch_name}» прокачана до уровня {new_level}! "
         f"Эффект: {upgrade.effect_value:.2f}. "
-        f"Потрачено: {cost} bio_coins. Следующий уровень: {next_cost} bio_coins."
+        f"Потрачено: {cost} 🧫 BioCoins. Следующий уровень: {next_cost} 🧫 BioCoins."
     )
 
 

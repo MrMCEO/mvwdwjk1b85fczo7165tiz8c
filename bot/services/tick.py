@@ -132,7 +132,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                 notifications.append({
                     "user_id": attacker.tg_id,
                     "message": (
-                        f"Пассивный доход: +{attacker_gain} bio_coins "
+                        f"Пассивный доход: +{attacker_gain} 🧫 BioCoins "
                         f"от заражения игрока {victim.username or str(victim.tg_id)}."
                     ),
                 })
@@ -140,8 +140,8 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
             notifications.append({
                 "user_id": victim.tg_id,
                 "message": (
-                    f"Вирус продолжает наносить урон: -{drain} bio_coins. "
-                    f"Баланс: {victim.bio_coins} bio_coins."
+                    f"Вирус продолжает наносить урон: -{drain} 🧫 BioCoins. "
+                    f"Баланс: {victim.bio_coins} 🧫 BioCoins."
                 ),
             })
 

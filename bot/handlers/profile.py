@@ -49,7 +49,7 @@ def _fmt_profile(data: dict) -> str:
     ]
 
     if u.get("premium_coins", 0) > 0:
-        lines.append(f"💎 Premium: <b>{u['premium_coins']:,}</b>")
+        lines.append(f"💎 PremiumCoins: <b>{u['premium_coins']:,}</b>")
 
     lines.append("")
     lines.append(f"⚔️ Активных атак исходящих: <b>{sent}</b>")

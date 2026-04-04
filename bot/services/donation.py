@@ -64,7 +64,7 @@ async def convert_premium_to_bio(
 
     if user.premium_coins < amount:
         return False, (
-            f"Недостаточно premium_coins. "
+            f"Недостаточно 💎 PremiumCoins. "
             f"Нужно {amount}, у тебя {user.premium_coins}."
         )
 
@@ -91,9 +91,9 @@ async def convert_premium_to_bio(
     await session.flush()
 
     return True, (
-        f"Конвертировано {amount} premium → {bio_gained} bio_coins "
+        f"Конвертировано {amount} 💎 PremiumCoins → {bio_gained} 🧫 BioCoins "
         f"(курс 1:{EXCHANGE_RATE}). "
-        f"Баланс: {user.bio_coins} bio | {user.premium_coins} premium."
+        f"Баланс: {user.bio_coins} 🧫 | {user.premium_coins} 💎."
     )
 
 

@@ -92,7 +92,7 @@ async def create_promo(
     )
     return True, (
         f"Промокод <b>{normalized}</b> создан!\n"
-        f"🧫 Bio: {bio_coins:,} | 💎 Premium: {premium_coins:,}\n"
+        f"🧫 BioCoins: {bio_coins:,} | 💎 PremiumCoins: {premium_coins:,}\n"
         f"Лимит активаций: {limit_str}\n"
         f"Действует до: {expires_str}"
     )
@@ -186,17 +186,20 @@ async def activate_promo(
     promo.current_activations += 1
 
     try:
-        await session.flush()
+        # Use a savepoint so that an IntegrityError only rolls back this
+        # operation and not the entire middleware-managed transaction.
+        async with session.begin_nested():
+            await session.flush()
     except IntegrityError:
-        # Race condition: duplicate activation
-        await session.rollback()
+        # Race condition: duplicate activation — savepoint was rolled back,
+        # outer transaction is still intact.
         return False, "Ты уже активировал этот промокод."
 
     parts = []
     if bio_gained > 0:
-        parts.append(f"+{bio_gained:,} 🧫 bio")
+        parts.append(f"+{bio_gained:,} 🧫 BioCoins")
     if premium_gained > 0:
-        parts.append(f"+{premium_gained:,} 💎 premium")
+        parts.append(f"+{premium_gained:,} 💎 PremiumCoins")
     reward_str = ", ".join(parts) if parts else "без валюты"
 
     logger.info(
@@ -209,7 +212,7 @@ async def activate_promo(
     return True, (
         f"Промокод <b>{normalized}</b> активирован!\n"
         f"{reward_str}\n\n"
-        f"Твой баланс: {user.bio_coins:,} 🧫 | {user.premium_coins:,} 💎"
+        f"Твой баланс: {user.bio_coins:,} 🧫 BioCoins | {user.premium_coins:,} 💎 PremiumCoins"
     )
 
 

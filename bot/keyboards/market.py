@@ -14,7 +14,7 @@ PAGE_SIZE = 5
 def market_menu_kb() -> InlineKeyboardMarkup:
     """Root navigation for the black market."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="💰 Купить/Продать bio",  callback_data="market_listings")
+    builder.button(text="🧫 Купить/Продать BioCoins",  callback_data="market_listings")
     builder.button(text="🎯 Контракты",            callback_data="market_contracts")
     builder.button(text="📋 Мои предложения",      callback_data="market_my")
     builder.button(text="◀️ Назад",               callback_data="main_menu")
@@ -50,8 +50,8 @@ def market_listings_kb(listings: list[dict], page: int = 0) -> InlineKeyboardMar
         builder.button(text="След. ▶️", callback_data=f"market_listings_pg_{page + 1}")
         nav_buttons += 1
 
-    builder.button(text="➕ Продать bio",  callback_data="market_sell")
-    builder.button(text="➕ Купить bio",   callback_data="market_buy")
+    builder.button(text="➕ Продать 🧫",  callback_data="market_sell")
+    builder.button(text="➕ Купить 🧫",   callback_data="market_buy")
     builder.button(text="◀️ Назад",        callback_data="market_menu")
 
     # Layout: each listing on its own row, nav row, then action buttons 2-wide, back full-width

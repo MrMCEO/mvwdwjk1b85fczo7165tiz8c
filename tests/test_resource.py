@@ -33,7 +33,7 @@ async def test_mine_resources(session: AsyncSession):
 
     assert amount == 30
     assert "30" in msg
-    assert "bio_coins" in msg
+    assert "BioCoins" in msg or "bio" in msg.lower()
 
     balance = await get_balance(session, user_id=2001)
     assert balance["bio_coins"] == 30

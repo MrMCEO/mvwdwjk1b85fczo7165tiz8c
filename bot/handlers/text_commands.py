@@ -186,9 +186,9 @@ async def text_shop(message: Message, session: AsyncSession) -> None:
     text = (
         "💎 <b>Магазин</b>\n\n"
         f"Твой баланс:\n"
-        f"🧫 Bio coins: <b>{bio:,}</b>\n"
-        f"💎 Premium coins: <b>{premium:,}</b>\n\n"
-        f"Курс обмена: 1 premium = {EXCHANGE_RATE} bio_coins\n\n"
+        f"🧫 BioCoins: <b>{bio:,}</b>\n"
+        f"💎 PremiumCoins: <b>{premium:,}</b>\n\n"
+        f"Курс обмена: 1 💎 PremiumCoin = {EXCHANGE_RATE} 🧫 BioCoins\n\n"
         "Покупка premium coins — <i>интеграция платежей в разработке</i> 🚧"
     )
     await message.answer(text, reply_markup=shop_menu_kb(), parse_mode="HTML")
@@ -283,7 +283,7 @@ async def text_laboratory(message: Message, session: AsyncSession) -> None:
 
     text = (
         "🔬 <b>Лаборатория</b>\n\n"
-        "Здесь ты можешь крафтить предметы за bio_coins.\n"
+        "Здесь ты можешь крафтить предметы за 🧫 BioCoins.\n"
         "Предметы одноразовые и хранятся в инвентаре.\n\n"
         f"📦 Предметов в инвентаре: <b>{total_items}</b>"
     )

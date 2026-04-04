@@ -211,9 +211,10 @@ async def cb_pandemic_attack(callback: CallbackQuery, session: AsyncSession) -> 
 
     user_id = callback.from_user.id
     damage, message = await attack_boss(session, user_id, event_id)
-    await session.commit()
 
-    await callback.answer(message[:200], show_alert=True)
+    # Strip HTML tags for show_alert (Telegram alerts don't render HTML)
+    alert_text = message.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "")
+    await callback.answer(alert_text[:200], show_alert=True)
 
     # Refresh the event detail view
     event = await get_event_by_id(session, event_id)
@@ -324,7 +325,6 @@ async def cmd_event_create(message: Message, session: AsyncSession) -> None:
             created_by=message.from_user.id,
         )
 
-    await session.commit()
     emoji = EVENT_EMOJI.get(event_type, "🌍")
     await message.answer(
         f"✅ Ивент создан!\n\n"
@@ -355,7 +355,6 @@ async def cmd_event_stop(message: Message, session: AsyncSession) -> None:
         return
 
     success = await stop_event(session, event_id)
-    await session.commit()
 
     if success:
         await message.answer(f"✅ Ивент #{event_id} остановлен.")
@@ -388,7 +387,6 @@ async def cmd_pandemic(message: Message, session: AsyncSession) -> None:
         duration_hours=hours,
         created_by=message.from_user.id,
     )
-    await session.commit()
 
     await message.answer(
         f"💀 <b>Пандемия запущена!</b>\n\n"

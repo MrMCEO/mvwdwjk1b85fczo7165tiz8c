@@ -114,7 +114,7 @@ async def create_sell_listing(
     Returns (success, message).
     """
     if bio_amount <= 0:
-        return False, "❌ Количество bio_coins должно быть больше нуля."
+        return False, "❌ Количество 🧫 BioCoins должно быть больше нуля."
     if premium_price <= 0:
         return False, "❌ Цена должна быть больше нуля."
 
@@ -128,7 +128,7 @@ async def create_sell_listing(
 
     if seller.bio_coins < total_freeze:
         return False, (
-            f"❌ Недостаточно bio_coins.\n"
+            f"❌ Недостаточно 🧫 BioCoins.\n"
             f"Нужно: <b>{total_freeze:,}</b> (включая комиссию {commission:,})\n"
             f"Твой баланс: <b>{seller.bio_coins:,}</b>"
         )
@@ -180,7 +180,7 @@ async def create_buy_listing(
     Returns (success, message).
     """
     if bio_amount <= 0:
-        return False, "❌ Количество bio_coins должно быть больше нуля."
+        return False, "❌ Количество 🧫 BioCoins должно быть больше нуля."
     if premium_price <= 0:
         return False, "❌ Цена должна быть больше нуля."
 
@@ -190,7 +190,7 @@ async def create_buy_listing(
 
     if buyer.premium_coins < premium_price:
         return False, (
-            f"❌ Недостаточно premium_coins.\n"
+            f"❌ Недостаточно 💎 PremiumCoins.\n"
             f"Нужно: <b>{premium_price:,}</b> 💎\n"
             f"Твой баланс: <b>{buyer.premium_coins:,}</b>"
         )
@@ -270,7 +270,7 @@ async def fulfill_listing(
         # Fulfiller pays premium, receives bio
         if fulfiller.premium_coins < listing.price:
             return False, (
-                f"❌ Недостаточно premium_coins.\n"
+                f"❌ Недостаточно 💎 PremiumCoins.\n"
                 f"Нужно: <b>{listing.price:,}</b> 💎\n"
                 f"Твой баланс: <b>{fulfiller.premium_coins:,}</b>"
             )
@@ -306,7 +306,7 @@ async def fulfill_listing(
     else:  # BUY_COINS — fulfiller provides bio, receives premium
         if fulfiller.bio_coins < listing.amount:
             return False, (
-                f"❌ Недостаточно bio_coins.\n"
+                f"❌ Недостаточно 🧫 BioCoins.\n"
                 f"Нужно: <b>{listing.amount:,}</b> 🧫\n"
                 f"Твой баланс: <b>{fulfiller.bio_coins:,}</b>"
             )
@@ -468,7 +468,7 @@ async def create_hit_contract(
 
     if client.bio_coins < reward_bio:
         return False, (
-            f"❌ Недостаточно bio_coins.\n"
+            f"❌ Недостаточно 🧫 BioCoins.\n"
             f"Нужно: <b>{reward_bio:,}</b> 🧫\n"
             f"Твой баланс: <b>{client.bio_coins:,}</b>"
         )
@@ -639,19 +639,15 @@ async def get_active_listings(
     limit: int = 20,
 ) -> list[dict]:
     """Return active (non-expired) listings, optionally filtered by type."""
-    stmt = (
-        select(MarketListing)
-        .where(
-            and_(
-                MarketListing.status == ListingStatus.ACTIVE,
-                MarketListing.expires_at > _now_utc(),
-            )
+    stmt = select(MarketListing).where(
+        and_(
+            MarketListing.status == ListingStatus.ACTIVE,
+            MarketListing.expires_at > _now_utc(),
         )
-        .order_by(MarketListing.created_at.desc())
-        .limit(limit)
     )
     if listing_type is not None:
         stmt = stmt.where(MarketListing.listing_type == listing_type)
+    stmt = stmt.order_by(MarketListing.created_at.desc()).limit(limit)
     result = await session.execute(stmt)
     return [_listing_to_dict(r) for r in result.scalars().all()]
 

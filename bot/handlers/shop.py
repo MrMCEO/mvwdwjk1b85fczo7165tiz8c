@@ -29,9 +29,9 @@ async def cb_shop_menu(callback: CallbackQuery, session: AsyncSession) -> None:
     text = (
         "💎 <b>Магазин</b>\n\n"
         f"Твой баланс:\n"
-        f"🧫 Bio coins: <b>{bio:,}</b>\n"
-        f"💎 Premium coins: <b>{premium:,}</b>\n\n"
-        f"Курс обмена: 1 premium = {EXCHANGE_RATE} bio_coins\n\n"
+        f"🧫 BioCoins: <b>{bio:,}</b>\n"
+        f"💎 PremiumCoins: <b>{premium:,}</b>\n\n"
+        f"Курс обмена: 1 💎 PremiumCoin = {EXCHANGE_RATE} 🧫 BioCoins\n\n"
         "Покупка premium coins — <i>интеграция платежей в разработке</i> 🚧"
     )
     await callback.message.edit_text(
@@ -44,7 +44,7 @@ async def cb_shop_menu(callback: CallbackQuery, session: AsyncSession) -> None:
 async def cb_buy_premium_stub(callback: CallbackQuery) -> None:
     """Stub handler for premium purchase buttons."""
     await callback.answer(
-        "💳 Покупка premium coins временно недоступна.\n"
+        "💳 Покупка 💎 PremiumCoins временно недоступна.\n"
         "Интеграция платёжной системы в разработке.",
         show_alert=True,
     )
@@ -55,9 +55,9 @@ async def cb_convert_start(callback: CallbackQuery, state: FSMContext) -> None:
     """Start premium → bio conversion flow from the shop."""
     await state.set_state(ShopConvertStates.waiting_for_amount)
     await callback.message.edit_text(
-        f"💱 <b>Конвертация premium → bio</b>\n\n"
-        f"Курс: 1 premium = {EXCHANGE_RATE} bio_coins\n\n"
-        "Введи количество premium coins для конвертации\n"
+        f"💱 <b>Конвертация 💎 PremiumCoins → 🧫 BioCoins</b>\n\n"
+        f"Курс: 1 💎 PremiumCoin = {EXCHANGE_RATE} 🧫 BioCoins\n\n"
+        "Введи количество 💎 PremiumCoins для конвертации\n"
         "или нажми «Назад» для отмены:",
         reply_markup=back_button("shop_menu"),
         parse_mode="HTML",

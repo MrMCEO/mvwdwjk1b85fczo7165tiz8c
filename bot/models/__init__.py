@@ -2,6 +2,7 @@
 # when init_db() calls Base.metadata.create_all().
 
 from bot.models.alliance import Alliance, AllianceMember, AllianceRole  # noqa: F401
+from bot.models.attack_log import AttackAttempt  # noqa: F401
 from bot.models.event import Event, EventType, PandemicParticipant  # noqa: F401
 from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade  # noqa: F401
 from bot.models.infection import Infection  # noqa: F401

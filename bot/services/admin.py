@@ -171,7 +171,7 @@ async def set_balance(
 
     if bio_coins is not None:
         if bio_coins < 0:
-            return False, "bio_coins не может быть отрицательным."
+            return False, "🧫 BioCoins не может быть отрицательным."
         delta_bio = bio_coins - user.bio_coins
         user.bio_coins = bio_coins
         tx = ResourceTransaction(
@@ -181,11 +181,11 @@ async def set_balance(
             reason=TransactionReason.DONATION,
         )
         session.add(tx)
-        changes.append(f"bio → {bio_coins:,} (delta {delta_bio:+,})")
+        changes.append(f"🧫 BioCoins → {bio_coins:,} (delta {delta_bio:+,})")
 
     if premium_coins is not None:
         if premium_coins < 0:
-            return False, "premium_coins не может быть отрицательным."
+            return False, "💎 PremiumCoins не может быть отрицательным."
         delta_prem = premium_coins - user.premium_coins
         user.premium_coins = premium_coins
         tx = ResourceTransaction(
@@ -195,7 +195,7 @@ async def set_balance(
             reason=TransactionReason.DONATION,
         )
         session.add(tx)
-        changes.append(f"premium → {premium_coins:,} (delta {delta_prem:+,})")
+        changes.append(f"💎 PremiumCoins → {premium_coins:,} (delta {delta_prem:+,})")
 
     if not changes:
         return False, "Не указано ни одно значение для изменения."
@@ -242,7 +242,7 @@ async def give_currency(
             reason=TransactionReason.DONATION,
         )
         session.add(tx)
-        parts.append(f"{bio_coins:+,} 🧫 bio")
+        parts.append(f"{bio_coins:+,} 🧫 BioCoins")
 
     if premium_coins != 0:
         user.premium_coins = max(0, user.premium_coins + premium_coins)
@@ -253,14 +253,14 @@ async def give_currency(
             reason=TransactionReason.DONATION,
         )
         session.add(tx)
-        parts.append(f"{premium_coins:+,} 💎 premium")
+        parts.append(f"{premium_coins:+,} 💎 PremiumCoins")
 
     await session.flush()
     uname = f"@{user.username}" if user.username else str(user_id)
     logger.info("Admin gave %s to %s", ", ".join(parts), uname)
     return True, (
         f"Игроку {uname} выдано: {', '.join(parts)}\n"
-        f"Текущий баланс: {user.bio_coins:,} 🧫 | {user.premium_coins:,} 💎"
+        f"Текущий баланс: {user.bio_coins:,} 🧫 BioCoins | {user.premium_coins:,} 💎 PremiumCoins"
     )
 
 

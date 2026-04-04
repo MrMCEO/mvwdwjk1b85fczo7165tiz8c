@@ -61,7 +61,7 @@ async def cb_lab_menu(callback: CallbackQuery, session: AsyncSession) -> None:
 
     text = (
         "🔬 <b>Лаборатория</b>\n\n"
-        "Здесь ты можешь крафтить предметы за bio_coins.\n"
+        "Здесь ты можешь крафтить предметы за 🧫 BioCoins.\n"
         "Предметы одноразовые и хранятся в инвентаре.\n\n"
         f"📦 Предметов в инвентаре: <b>{total_items}</b>"
     )
@@ -260,7 +260,7 @@ async def fsm_spy_target(
 
     text = (
         f"🔭 <b>Разведка: @{escape(data['username'])}</b>\n\n"
-        f"💰 Bio coins: <b>{data['bio_coins']:,}</b> 🧫\n"
+        f"🧫 BioCoins: <b>{data['bio_coins']:,}</b>\n"
         f"🦠 Заражений: <b>{data['active_infections']}</b> (входящих)\n\n"
         f"🦠 <b>Вирус</b>\n"
         f"   Имя: {escape(virus.get('name', '—'))}\n"

@@ -25,8 +25,8 @@ def _fmt_resources(balance: dict) -> str:
     premium = balance.get("premium_coins", 0)
     return (
         "💰 <b>Ресурсы</b>\n\n"
-        f"🧫 Bio coins: <b>{bio:,}</b>\n"
-        f"💎 Premium coins: <b>{premium:,}</b>"
+        f"🧫 BioCoins: <b>{bio:,}</b>\n"
+        f"💎 PremiumCoins: <b>{premium:,}</b>"
     )
 
 
@@ -79,9 +79,9 @@ async def cb_convert_premium_start(
     """Ask user how many premium coins to convert."""
     await state.set_state(ConvertStates.waiting_for_amount)
     await callback.message.edit_text(
-        f"💱 <b>Конвертация premium → bio</b>\n\n"
-        f"Курс: 1 premium = {EXCHANGE_RATE} bio_coins\n\n"
-        "Введи количество premium coins для конвертации\n"
+        f"💱 <b>Конвертация 💎 PremiumCoins → 🧫 BioCoins</b>\n\n"
+        f"Курс: 1 💎 PremiumCoin = {EXCHANGE_RATE} 🧫 BioCoins\n\n"
+        "Введи количество 💎 PremiumCoins для конвертации\n"
         "или нажми «Назад» для отмены:",
         reply_markup=back_button("resources_menu"),
         parse_mode="HTML",

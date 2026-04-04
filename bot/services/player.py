@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Default stats for a brand-new player
 # ---------------------------------------------------------------------------
 
-DEFAULT_VIRUS_NAME = "Unnamed Virus"
+DEFAULT_VIRUS_NAME = "Неизвестный вирус"
 DEFAULT_ATTACK_POWER = 10
 DEFAULT_SPREAD_RATE = 1.0   # balanced: was 0.1, made attack_score=1 vs defense=10 (9% chance). Now 10 vs ~10.5 (~48%)
 DEFAULT_MUTATION_POINTS = 0

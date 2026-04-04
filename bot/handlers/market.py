@@ -65,8 +65,8 @@ class MarketContractStates(StatesGroup):
 # ---------------------------------------------------------------------------
 
 _TYPE_LABEL = {
-    ListingType.SELL_COINS: "📤 Продажа bio",
-    ListingType.BUY_COINS: "📥 Покупка bio",
+    ListingType.SELL_COINS: "📤 Продажа 🧫 BioCoins",
+    ListingType.BUY_COINS: "📥 Покупка 🧫 BioCoins",
     ListingType.HIT_CONTRACT: "🎯 Контракт",
 }
 
@@ -85,17 +85,17 @@ def _fmt_listing(item: dict) -> str:
 
     if ltype == ListingType.SELL_COINS:
         return (
-            f"<b>#{item['id']} — Продажа bio_coins</b>\n"
-            f"Количество: <b>{item['amount']:,}</b> 🧫\n"
-            f"Цена: <b>{item['price']:,}</b> 💎 premium\n"
+            f"<b>#{item['id']} — Продажа 🧫 BioCoins</b>\n"
+            f"Количество: <b>{item['amount']:,}</b> 🧫 BioCoins\n"
+            f"Цена: <b>{item['price']:,}</b> 💎 PremiumCoins\n"
             f"Статус: {status}\n"
             f"Действует до: {expires} UTC"
         )
     elif ltype == ListingType.BUY_COINS:
         return (
-            f"<b>#{item['id']} — Покупка bio_coins</b>\n"
-            f"Хочет купить: <b>{item['amount']:,}</b> 🧫\n"
-            f"Готов заплатить: <b>{item['price']:,}</b> 💎 premium\n"
+            f"<b>#{item['id']} — Покупка 🧫 BioCoins</b>\n"
+            f"Хочет купить: <b>{item['amount']:,}</b> 🧫 BioCoins\n"
+            f"Готов заплатить: <b>{item['price']:,}</b> 💎 PremiumCoins\n"
             f"Статус: {status}\n"
             f"Действует до: {expires} UTC"
         )
@@ -104,7 +104,7 @@ def _fmt_listing(item: dict) -> str:
         return (
             f"<b>#{item['id']} — Контракт на заражение</b>\n"
             f"Цель: <b>@{escape(item.get('target_username') or '???')}</b>\n"
-            f"Награда: <b>{item['reward']:,}</b> 🧫 bio\n"
+            f"Награда: <b>{item['reward']:,}</b> 🧫 BioCoins\n"
             f"Статус: {claimed}\n"
             f"Действует до: {expires} UTC"
         )
@@ -359,8 +359,8 @@ async def cb_market_my_noop(callback: CallbackQuery) -> None:
 async def cb_market_sell(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(MarketSellStates.waiting_for_amount)
     await callback.message.edit_text(
-        "📤 <b>Продажа bio_coins</b>\n\n"
-        "Введи количество <b>bio_coins</b>, которое хочешь продать:\n"
+        "📤 <b>Продажа 🧫 BioCoins</b>\n\n"
+        "Введи количество <b>🧫 BioCoins</b>, которое хочешь продать:\n"
         "<i>(Комиссия 5% — удерживается при создании предложения)</i>\n\n"
         "Или нажми «Назад» для отмены:",
         reply_markup=back_button("market_menu"),
@@ -386,8 +386,8 @@ async def msg_sell_amount(message: Message, state: FSMContext) -> None:
     await state.update_data(sell_amount=amount)
     await state.set_state(MarketSellStates.waiting_for_price)
     await message.answer(
-        f"📤 Продаёшь: <b>{amount:,}</b> 🧫 bio\n\n"
-        "Теперь введи цену в <b>premium_coins</b> за всё количество:",
+        f"📤 Продаёшь: <b>{amount:,}</b> 🧫 BioCoins\n\n"
+        "Теперь введи цену в <b>💎 PremiumCoins</b> за всё количество:",
         reply_markup=back_button("market_menu"),
         parse_mode="HTML",
     )
@@ -432,8 +432,8 @@ async def msg_sell_price(
 async def cb_market_buy(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(MarketBuyStates.waiting_for_amount)
     await callback.message.edit_text(
-        "📥 <b>Покупка bio_coins</b>\n\n"
-        "Введи количество <b>bio_coins</b>, которое хочешь купить:\n\n"
+        "📥 <b>Покупка 🧫 BioCoins</b>\n\n"
+        "Введи количество <b>🧫 BioCoins</b>, которое хочешь купить:\n\n"
         "Или нажми «Назад» для отмены:",
         reply_markup=back_button("market_menu"),
         parse_mode="HTML",
@@ -458,8 +458,8 @@ async def msg_buy_amount(message: Message, state: FSMContext) -> None:
     await state.update_data(buy_amount=amount)
     await state.set_state(MarketBuyStates.waiting_for_price)
     await message.answer(
-        f"📥 Хочешь купить: <b>{amount:,}</b> 🧫 bio\n\n"
-        "Введи цену в <b>premium_coins</b>, которую готов заплатить:",
+        f"📥 Хочешь купить: <b>{amount:,}</b> 🧫 BioCoins\n\n"
+        "Введи цену в <b>💎 PremiumCoins</b>, которую готов заплатить:",
         reply_markup=back_button("market_menu"),
         parse_mode="HTML",
     )
@@ -529,7 +529,7 @@ async def msg_contract_username(message: Message, state: FSMContext) -> None:
     await state.set_state(MarketContractStates.waiting_for_reward)
     await message.answer(
         f"🎯 Цель: <b>@{escape(clean)}</b>\n\n"
-        "Введи <b>награду в bio_coins</b> для исполнителя контракта:",
+        "Введи <b>награду в 🧫 BioCoins</b> для исполнителя контракта:",
         reply_markup=back_button("market_menu"),
         parse_mode="HTML",
     )

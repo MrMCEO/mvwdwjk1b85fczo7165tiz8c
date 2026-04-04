@@ -109,7 +109,7 @@ def _fmt_player_card(data: dict) -> str:
 
     lines = [
         f"👤 <b>{uname}</b> (ID: <code>{u['tg_id']}</code>)",
-        f"💰 <b>{u['bio_coins']:,}</b> 🧫 bio / <b>{u['premium_coins']:,}</b> 💎 premium",
+        f"🧫 <b>{u['bio_coins']:,}</b> BioCoins / <b>{u['premium_coins']:,}</b> 💎 PremiumCoins",
     ]
 
     if v:
@@ -158,8 +158,8 @@ def _fmt_promo_list(promos: list[dict]) -> str:
     for p in promos:
         status = "✅" if p["is_active"] and not p["expired"] else "❌"
         limit = f"{p['current_activations']}/{p['max_activations']}" if p["max_activations"] > 0 else f"{p['current_activations']}/∞"
-        bio_str = f"+{p['bio_coins']:,}🧫" if p["bio_coins"] else ""
-        prem_str = f"+{p['premium_coins']:,}💎" if p["premium_coins"] else ""
+        bio_str = f"+{p['bio_coins']:,} 🧫" if p["bio_coins"] else ""
+        prem_str = f"+{p['premium_coins']:,} 💎" if p["premium_coins"] else ""
         reward = " ".join(filter(None, [bio_str, prem_str])) or "—"
         lines.append(f"{status} <b>{escape(p['code'])}</b> ({limit}) {reward}")
     return "\n".join(lines)
@@ -180,7 +180,7 @@ def _fmt_promo_detail(info: dict) -> str:
     lines = [
         f"📋 Промокод <b>{escape(info['code'])}</b>",
         f"Статус: {status}",
-        f"🧫 Bio: {info['bio_coins']:,} | 💎 Premium: {info['premium_coins']:,}",
+        f"🧫 BioCoins: {info['bio_coins']:,} | 💎 PremiumCoins: {info['premium_coins']:,}",
         f"Активаций: {limit}",
         f"Действует до: {expires_str}",
         f"Создан: {created_str}",
@@ -250,7 +250,7 @@ async def _get_stats(session: AsyncSession) -> str:
         f"👥 Игроков: <b>{total_users:,}</b>\n"
         f"🦠 Активных заражений: <b>{active_infections:,}</b>\n"
         f"🏰 Альянсов: <b>{total_alliances:,}</b>\n"
-        f"💰 Bio в обороте: <b>{bio_in_circulation:,}</b>\n"
+        f"🧫 BioCoins в обороте: <b>{bio_in_circulation:,}</b>\n"
         f"📋 Активных промокодов: <b>{total_promos:,}</b>"
     )
 
@@ -818,7 +818,11 @@ async def cb_give_start(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("admin_give_"))
+@router.callback_query(
+    F.data.startswith("admin_give_")
+    & ~F.data.startswith("admin_give_start")
+    & ~F.data.startswith("admin_give_confirm_")
+)
 async def cb_give_player(callback: CallbackQuery, state: FSMContext) -> None:
     """Start give currency for a specific player (from player card)."""
     if not _is_admin(callback.from_user.id):
@@ -826,9 +830,6 @@ async def cb_give_player(callback: CallbackQuery, state: FSMContext) -> None:
         return
 
     suffix = callback.data.removeprefix("admin_give_")
-    # Could be "start" (handled above) or a user_id
-    if suffix == "start":
-        return
 
     try:
         user_id = int(suffix)
@@ -893,7 +894,7 @@ async def fsm_give_input(message: Message, session: AsyncSession, state: FSMCont
 
     await message.answer(
         f"Выдать <b>{uname}</b>:\n"
-        f"🧫 {bio:,} bio и 💎 {premium:,} premium?",
+        f"🧫 {bio:,} BioCoins и 💎 {premium:,} PremiumCoins?",
         reply_markup=confirm_give_kb(user_id, bio, premium),
         parse_mode="HTML",
     )

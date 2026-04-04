@@ -17,10 +17,11 @@ import math
 import random
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from bot.models.attack_log import AttackAttempt
 from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade
 from bot.models.infection import Infection
 from bot.models.resource import Currency as CurrencyType
@@ -33,6 +34,9 @@ from bot.models.virus import Virus, VirusBranch, VirusUpgrade
 # ---------------------------------------------------------------------------
 
 ATTACK_COOLDOWN = timedelta(minutes=30)
+
+MAX_ATTEMPTS_PER_TARGET_HOUR = 3
+MAX_SUCCESSFUL_INFECTIONS_HOUR = 5
 
 # Base damage per tick before lethality adjustments
 BASE_DAMAGE_PER_TICK: float = 5.0
@@ -123,6 +127,36 @@ async def attack_player(
     if attacker_id == victim_id:
         return False, "Нельзя атаковать самого себя."
 
+    # --- Rate limit: max 3 attempts on the same target per hour ---
+    one_hour_ago = _now_utc() - timedelta(hours=1)
+    attempts_on_target = await session.execute(
+        select(func.count()).select_from(AttackAttempt).where(
+            AttackAttempt.attacker_id == attacker_id,
+            AttackAttempt.victim_id == victim_id,
+            AttackAttempt.attempted_at >= one_hour_ago,
+        )
+    )
+    count = attempts_on_target.scalar_one()
+    if count >= MAX_ATTEMPTS_PER_TARGET_HOUR:
+        return False, (
+            "Вы уже атаковали этого игрока 3 раза за последний час. "
+            "Попробуйте позже."
+        )
+
+    # --- Rate limit: max 5 successful infections per hour (all targets) ---
+    successful_infections = await session.execute(
+        select(func.count()).select_from(AttackAttempt).where(
+            AttackAttempt.attacker_id == attacker_id,
+            AttackAttempt.success == True,  # noqa: E712
+            AttackAttempt.attempted_at >= one_hour_ago,
+        )
+    )
+    success_count = successful_infections.scalar_one()
+    if success_count >= MAX_SUCCESSFUL_INFECTIONS_HOUR:
+        return False, (
+            "Вы достигли лимита заражений (5 в час). Попробуйте позже."
+        )
+
     # --- Check both players exist ---
     # Lock attacker row to prevent concurrent attacks from the same user
     attacker = await _get_user(session, attacker_id, lock=True)
@@ -211,6 +245,14 @@ async def attack_player(
     success = roll < chance
 
     if not success:
+        # Log the failed attempt
+        attempt = AttackAttempt(
+            attacker_id=attacker_id,
+            victim_id=victim_id,
+            success=False,
+        )
+        session.add(attempt)
+        await session.flush()
         return False, (
             f"Атака провалилась! "
             f"Шанс заражения был {chance * 100:.1f}% (бросок: {roll * 100:.1f}%). "
@@ -236,12 +278,20 @@ async def attack_player(
         is_active=True,
     )
     session.add(infection)
+
+    # --- Log the successful attempt ---
+    attempt = AttackAttempt(
+        attacker_id=attacker_id,
+        victim_id=victim_id,
+        success=True,
+    )
+    session.add(attempt)
     await session.flush()
 
     victim_display = victim.username or str(victim_id)
     return True, (
         f"Атака успешна! Игрок {victim_display} заражён. "
-        f"Шанс был {chance * 100:.1f}%, урон в тик: {damage_per_tick:.1f} bio_coins."
+        f"Шанс был {chance * 100:.1f}%, урон в тик: {damage_per_tick:.1f} 🧫 BioCoins."
     )
 
 
@@ -317,7 +367,7 @@ async def try_cure(
 
     if user.bio_coins < cost:
         return False, (
-            f"Недостаточно bio_coins для лечения. "
+            f"Недостаточно 🧫 BioCoins для лечения. "
             f"Нужно {cost}, у тебя {user.bio_coins}."
         )
 
@@ -336,5 +386,5 @@ async def try_cure(
 
     return True, (
         f"Заражение #{infection_id} успешно вылечено! "
-        f"Потрачено {cost} bio_coins. Баланс: {user.bio_coins} bio_coins."
+        f"Потрачено {cost} 🧫 BioCoins. Баланс: {user.bio_coins} 🧫 BioCoins."
     )

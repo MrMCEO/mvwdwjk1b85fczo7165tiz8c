@@ -25,6 +25,7 @@ from bot.models.resource import (
 )
 from bot.models.user import User
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
+from bot.services.event import get_event_modifier
 from bot.services.referral import check_qualification, update_referral_activity
 
 # ---------------------------------------------------------------------------
@@ -187,6 +188,10 @@ async def upgrade_virus_branch(
     cfg = UPGRADE_CONFIG["virus"][branch_key]
     cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], current_level)
 
+    # Event modifier (Arms Race = -50% cost)
+    upgrade_cost_mult = await get_event_modifier(session, "upgrade_cost_mult")
+    cost = max(1, int(cost * upgrade_cost_mult))
+
     if user.bio_coins < cost:
         return False, (
             f"Недостаточно 🧫 BioCoins. Нужно {cost}, у тебя {user.bio_coins}."
@@ -228,6 +233,10 @@ async def upgrade_virus_branch(
     # Реферальная программа: обновить активность и проверить квалификацию
     await update_referral_activity(session, user_id)
     await check_qualification(session, user_id)
+
+    # Track activity for event leaderboards
+    from bot.services.event import track_activity
+    await track_activity(session, user_id, "upgrade")
 
     branch_name = _VIRUS_BRANCH_NAMES[branch_key]
     new_level = upgrade.level
@@ -275,6 +284,10 @@ async def upgrade_immunity_branch(
     cfg = UPGRADE_CONFIG["immunity"][branch_key]
     cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], current_level)
 
+    # Event modifier (Arms Race = -50% cost)
+    upgrade_cost_mult = await get_event_modifier(session, "upgrade_cost_mult")
+    cost = max(1, int(cost * upgrade_cost_mult))
+
     if user.bio_coins < cost:
         return False, (
             f"Недостаточно 🧫 BioCoins. Нужно {cost}, у тебя {user.bio_coins}."
@@ -316,6 +329,10 @@ async def upgrade_immunity_branch(
     # Реферальная программа: обновить активность и проверить квалификацию
     await update_referral_activity(session, user_id)
     await check_qualification(session, user_id)
+
+    # Track activity for event leaderboards
+    from bot.services.event import track_activity
+    await track_activity(session, user_id, "upgrade")
 
     branch_name = _IMMUNITY_BRANCH_NAMES[branch_key]
     new_level = upgrade.level

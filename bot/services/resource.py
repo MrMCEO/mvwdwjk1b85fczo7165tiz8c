@@ -27,6 +27,9 @@ from bot.models.resource import (
     TransactionReason,
 )
 from bot.models.user import User
+from bot.services.alliance import get_alliance_mining_bonus
+from bot.services.event import get_event_modifier
+from bot.services.mutation_effects import apply_mutation_to_mining
 from bot.services.premium import get_daily_multiplier, get_mining_cooldown, get_mining_multiplier
 
 # ---------------------------------------------------------------------------
@@ -125,6 +128,19 @@ async def mine_resources(
     # --- Mine ---
     multiplier = await get_mining_multiplier(session, user_id)
     amount = int(random.randint(MINING_MIN, MINING_MAX) * multiplier)
+
+    # Event modifier (Gold Rush = x2)
+    mining_event_mult = await get_event_modifier(session, "mining_mult")
+    amount = int(amount * mining_event_mult)
+
+    # Mutation modifier (Bio Magnet = x2)
+    mutation_mining_mult = await apply_mutation_to_mining(session, user_id)
+    amount = int(amount * mutation_mining_mult)
+
+    # Alliance mining bonus
+    alliance_mining_bonus = await get_alliance_mining_bonus(session, user_id)
+    amount = int(amount * (1.0 + alliance_mining_bonus))
+
     user.bio_coins += amount
 
     tx = ResourceTransaction(
@@ -135,6 +151,10 @@ async def mine_resources(
     )
     session.add(tx)
     await session.flush()
+
+    # Track activity for event leaderboards
+    from bot.services.event import track_activity
+    await track_activity(session, user_id, "mine")
 
     return amount, f"Добыто {amount} 🧫 BioCoins! Баланс: {user.bio_coins} 🧫 BioCoins."
 
@@ -190,6 +210,10 @@ async def claim_daily_bonus(
     streak_multiplier = 1.0 + DAILY_STREAK_BONUS * (new_streak - 1)
     premium_multiplier = await get_daily_multiplier(session, user_id)
     amount = int(DAILY_BASE * streak_multiplier * premium_multiplier)
+
+    # Event modifier (Gold Rush also boosts daily bonus)
+    mining_event_mult = await get_event_modifier(session, "mining_mult")
+    amount = int(amount * mining_event_mult)
 
     user.bio_coins += amount
 

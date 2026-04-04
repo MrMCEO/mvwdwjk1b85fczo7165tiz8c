@@ -35,10 +35,13 @@ from bot.keyboards.events import (
 from bot.models.event import EventType
 from bot.services.event import (
     DEFAULT_BOSS_HP,
+    EVENT_REWARDS,
+    PANDEMIC_REWARDS,
     attack_boss,
     create_event,
     get_active_events,
     get_event_by_id,
+    get_event_leaderboard,
     get_pandemic_leaderboard,
     start_pandemic,
     stop_event,
@@ -99,7 +102,7 @@ def _fmt_events_list(events: list) -> str:
     return "\n".join(lines)
 
 
-def _fmt_event_detail(event) -> str:
+def _fmt_event_detail(event, leaderboard: list[dict] | None = None, is_pandemic: bool = False) -> str:
     emoji = EVENT_EMOJI.get(event.event_type, "🌍")
     type_label = EVENT_TYPE_LABELS.get(event.event_type, event.event_type.value)
     remaining = _fmt_time_remaining(event.ends_at)
@@ -127,6 +130,33 @@ def _fmt_event_detail(event) -> str:
         f"🕐 Конец:  {ends} UTC",
         f"⏳ Осталось: <b>{remaining}</b>",
     ]
+
+    # Top-5 leaderboard preview
+    if leaderboard:
+        lines.append("")
+        lines.append("🏆 <b>Топ участников:</b>")
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        for entry in leaderboard[:5]:
+            rank = entry["rank"]
+            medal = medals.get(rank, f"{rank}.")
+            username = escape(entry["username"])
+            score_label = "урона" if is_pandemic else "очков"
+            score = entry.get("damage", entry.get("score", 0))
+            lines.append(f"{medal} @{username} — {score:,} {score_label}")
+
+    # Prize preview
+    reward_table = PANDEMIC_REWARDS if is_pandemic else EVENT_REWARDS
+    lines.append("")
+    lines.append("🎁 <b>Призы:</b>")
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    for r in reward_table:
+        place = r["place"]
+        medal = medals.get(place, f"{place}.")
+        parts = [f"{r['bio']} 🧫"]
+        if r["premium"] > 0:
+            parts.append(f"{r['premium']} 💎")
+        lines.append(f"{medal} {' + '.join(parts)}")
+
     return "\n".join(lines)
 
 
@@ -144,6 +174,24 @@ def _fmt_leaderboard(leaderboard: list[dict], event_title: str) -> str:
         username = escape(entry["username"])
         damage = entry["damage"]
         lines.append(f"{medal} <b>{username}</b> — {damage:,} урона")
+
+    return "\n".join(lines)
+
+
+def _fmt_event_activity_leaderboard(leaderboard: list[dict], event_title: str) -> str:
+    lines = [f"🏆 <b>Таблица лидеров — {escape(event_title)}</b>\n"]
+
+    if not leaderboard:
+        lines.append("Ещё никто не участвовал в ивенте.")
+        return "\n".join(lines)
+
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    for entry in leaderboard:
+        rank = entry["rank"]
+        medal = medals.get(rank, f"{rank}.")
+        username = escape(entry["username"])
+        score = entry["score"]
+        lines.append(f"{medal} @<b>{username}</b> — {score:,} очков")
 
     return "\n".join(lines)
 
@@ -172,7 +220,7 @@ async def cb_events_menu(callback: CallbackQuery, session: AsyncSession) -> None
 
 @router.callback_query(lambda c: c.data and c.data.startswith("event_info_"))
 async def cb_event_info(callback: CallbackQuery, session: AsyncSession) -> None:
-    """Show detailed info about a specific event."""
+    """Show detailed info about a specific event, including top-5 and prizes."""
     try:
         event_id = int(callback.data.split("_")[-1])
     except (ValueError, IndexError):
@@ -191,7 +239,15 @@ async def cb_event_info(callback: CallbackQuery, session: AsyncSession) -> None:
         return
 
     is_pandemic = event.event_type == EventType.PANDEMIC
-    text = _fmt_event_detail(event)
+    if is_pandemic:
+        leaderboard = await get_pandemic_leaderboard(session, event_id, limit=5)
+        # normalize key to 'score' for unified rendering
+        for e in leaderboard:
+            e["score"] = e.get("damage", 0)
+    else:
+        leaderboard = await get_event_leaderboard(session, event_id, limit=5)
+
+    text = _fmt_event_detail(event, leaderboard=leaderboard, is_pandemic=is_pandemic)
     await callback.message.edit_text(
         text,
         reply_markup=event_info_kb(event, is_pandemic=is_pandemic),
@@ -255,6 +311,31 @@ async def cb_pandemic_leaderboard(callback: CallbackQuery, session: AsyncSession
     await callback.message.edit_text(
         text,
         reply_markup=pandemic_kb(event_id),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("event_leaderboard_"))
+async def cb_event_leaderboard(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Show full activity leaderboard for a non-PANDEMIC event."""
+    try:
+        event_id = int(callback.data.split("_")[-1])
+    except (ValueError, IndexError):
+        await callback.answer("Неверный ID ивента.", show_alert=True)
+        return
+
+    event = await get_event_by_id(session, event_id)
+    if event is None:
+        await callback.answer("Ивент не найден.", show_alert=True)
+        return
+
+    leaderboard = await get_event_leaderboard(session, event_id, limit=10)
+    text = _fmt_event_activity_leaderboard(leaderboard, event.title)
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=event_info_kb(event, is_pandemic=False),
         parse_mode="HTML",
     )
     await callback.answer()
@@ -354,7 +435,7 @@ async def cmd_event_stop(message: Message, session: AsyncSession) -> None:
         await message.answer("❌ ID ивента должен быть числом.")
         return
 
-    success = await stop_event(session, event_id)
+    success, _notifications = await stop_event(session, event_id)
 
     if success:
         await message.answer(f"✅ Ивент #{event_id} остановлен.")

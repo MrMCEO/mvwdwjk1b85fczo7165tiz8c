@@ -62,6 +62,7 @@ def event_info_kb(event: Event, is_pandemic: bool = False) -> InlineKeyboardMark
     Event detail view keyboard.
 
     For pandemic events: adds "Атаковать босса" and "Таблица лидеров" buttons.
+    For regular events:  adds "Таблица лидеров" button.
     """
     builder = InlineKeyboardBuilder()
 
@@ -73,6 +74,11 @@ def event_info_kb(event: Event, is_pandemic: bool = False) -> InlineKeyboardMark
         builder.button(
             text="🏆 Таблица лидеров",
             callback_data=f"pandemic_leaderboard_{event.id}",
+        )
+    else:
+        builder.button(
+            text="🏆 Таблица лидеров",
+            callback_data=f"event_leaderboard_{event.id}",
         )
 
     builder.button(text="◀️ К ивентам", callback_data="events_menu")

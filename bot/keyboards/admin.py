@@ -3,6 +3,32 @@
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from bot.models.event import EventType
+
+# ---------------------------------------------------------------------------
+# Event type display data
+# ---------------------------------------------------------------------------
+
+EVENT_EMOJI: dict[EventType, str] = {
+    EventType.PANDEMIC:       "💀",
+    EventType.GOLD_RUSH:      "💎",
+    EventType.ARMS_RACE:      "🔧",
+    EventType.PLAGUE_SEASON:  "☣️",
+    EventType.IMMUNITY_WAVE:  "💉",
+    EventType.MUTATION_STORM: "🧬",
+    EventType.CEASEFIRE:      "🕊",
+}
+
+EVENT_NAMES: dict[EventType, str] = {
+    EventType.PANDEMIC:       "Пандемия",
+    EventType.GOLD_RUSH:      "Золотая лихорадка",
+    EventType.ARMS_RACE:      "Гонка вооружений",
+    EventType.PLAGUE_SEASON:  "Сезон чумы",
+    EventType.IMMUNITY_WAVE:  "Волна иммунитета",
+    EventType.MUTATION_STORM: "Мутационный шторм",
+    EventType.CEASEFIRE:      "Перемирие",
+}
+
 
 def admin_menu_kb() -> InlineKeyboardMarkup:
     """Main admin panel navigation keyboard."""
@@ -11,7 +37,8 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
     builder.button(text="🔍 Найти игрока", callback_data="admin_find_player")
     builder.button(text="💰 Выдать валюту", callback_data="admin_give_start")
     builder.button(text="📊 Статистика",   callback_data="admin_stats")
-    builder.adjust(2, 2)
+    builder.button(text="🌍 Ивенты",       callback_data="admin_events")
+    builder.adjust(2, 2, 1)
     return builder.as_markup()
 
 
@@ -94,4 +121,118 @@ def confirm_give_kb(user_id: int, bio: int, premium: int) -> InlineKeyboardMarku
     )
     builder.button(text="❌ Нет", callback_data="admin_cancel")
     builder.adjust(2)
+    return builder.as_markup()
+
+
+# ---------------------------------------------------------------------------
+# Events management keyboards
+# ---------------------------------------------------------------------------
+
+
+def admin_events_kb(active_events: list) -> InlineKeyboardMarkup:
+    """Events management menu: create button, list of active events, back."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="➕ Создать ивент", callback_data="admin_event_types")
+    for event in active_events:
+        emoji = EVENT_EMOJI.get(event.event_type, "🌍")
+        builder.button(
+            text=f"{emoji} {event.title}",
+            callback_data=f"admin_evt_detail:{event.id}",
+        )
+    builder.button(text="◀️ Назад", callback_data="admin_menu")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def admin_event_types_kb() -> InlineKeyboardMarkup:
+    """Select event type to create."""
+    builder = InlineKeyboardBuilder()
+    type_order = [
+        EventType.GOLD_RUSH,
+        EventType.ARMS_RACE,
+        EventType.PLAGUE_SEASON,
+        EventType.IMMUNITY_WAVE,
+        EventType.MUTATION_STORM,
+        EventType.CEASEFIRE,
+        EventType.PANDEMIC,
+    ]
+    for et in type_order:
+        emoji = EVENT_EMOJI[et]
+        name = EVENT_NAMES[et]
+        builder.button(
+            text=f"{emoji} {name}",
+            callback_data=f"admin_evt_create:{et.value}",
+        )
+    builder.button(text="◀️ Назад", callback_data="admin_events")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def admin_event_duration_kb(event_type: str) -> InlineKeyboardMarkup:
+    """Select event duration in hours."""
+    builder = InlineKeyboardBuilder()
+    durations = [
+        ("1 час",    1),
+        ("2 часа",   2),
+        ("4 часа",   4),
+        ("8 часов",  8),
+        ("12 часов", 12),
+        ("24 часа",  24),
+    ]
+    for label, hours in durations:
+        builder.button(
+            text=label,
+            callback_data=f"admin_evt_dur:{event_type}:{hours}",
+        )
+    builder.button(text="◀️ Назад", callback_data="admin_event_types")
+    builder.adjust(2, 2, 2, 1)
+    return builder.as_markup()
+
+
+def admin_event_detail_kb(event_id: int) -> InlineKeyboardMarkup:
+    """Active event detail view with stop and back buttons."""
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="🛑 Остановить",
+        callback_data=f"admin_evt_stop_ask:{event_id}",
+    )
+    builder.button(text="◀️ Назад", callback_data="admin_events")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def admin_event_stop_confirm_kb(event_id: int) -> InlineKeyboardMarkup:
+    """Confirm stopping an event."""
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="✅ Да, остановить",
+        callback_data=f"admin_evt_stop:{event_id}",
+    )
+    builder.button(
+        text="❌ Отмена",
+        callback_data=f"admin_evt_detail:{event_id}",
+    )
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def admin_pandemic_hp_kb(duration: int) -> InlineKeyboardMarkup:
+    """Select pandemic boss HP."""
+    builder = InlineKeyboardBuilder()
+    hp_options = [
+        ("5 000 HP",  5_000),
+        ("10 000 HP", 10_000),
+        ("25 000 HP", 25_000),
+        ("50 000 HP", 50_000),
+    ]
+    for label, hp in hp_options:
+        builder.button(
+            text=label,
+            callback_data=f"admin_pandemic:{duration}:{hp}",
+        )
+    builder.button(
+        text="◀️ Назад",
+        callback_data=f"admin_evt_dur:PANDEMIC:{duration}",
+    )
+    builder.adjust(2, 2, 1)
     return builder.as_markup()

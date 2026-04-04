@@ -30,23 +30,42 @@ def _place(n: int) -> str:
     return _MEDALS.get(n, f"{n}.")
 
 
-def _is_premium_active(premium_until: datetime | None) -> bool:
-    """Return True if the subscription is currently active."""
-    if premium_until is None:
-        return False
-    now = datetime.now(UTC).replace(tzinfo=None)
-    return premium_until > now
+def _is_status_active(row: dict) -> bool:
+    """Return True if the user has any active paid/special status."""
+    status = row.get("status", "FREE")
+    # OWNER and LEGEND are permanent
+    if status in ("OWNER", "BIO_LEGEND"):
+        return True
+    # All other paid statuses check premium_until
+    if status != "FREE":
+        pu = row.get("premium_until")
+        if pu is not None:
+            now = datetime.now(UTC).replace(tzinfo=None)
+            return pu > now
+    return False
+
+
+def _get_status_emoji(row: dict) -> str:
+    """Return emoji for the user's status."""
+    from bot.services.premium import STATUS_CONFIG, UserStatus
+    try:
+        status = UserStatus(row.get("status", "FREE"))
+        return STATUS_CONFIG.get(status, {}).get("emoji", "")
+    except ValueError:
+        return ""
 
 
 def _fmt_row_username(row: dict) -> str:
     """Build a display name for a rating row using display_name/prefix if available."""
     base = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
-    active = _is_premium_active(row.get("premium_until"))
+    active = _is_status_active(row)
+    emoji = _get_status_emoji(row)
     return format_username(
         base,
         row.get("premium_prefix"),
         active,
         display_name=row.get("display_name"),
+        status_emoji=emoji,
     )
 
 

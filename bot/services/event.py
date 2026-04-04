@@ -24,13 +24,15 @@ Pandemic boss flow:
 from __future__ import annotations
 
 import logging
+import random
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from bot.models.event import Event, EventType, PandemicParticipant
+from bot.models.event import Event, EventParticipant, EventType, PandemicParticipant
+from bot.models.mutation import Mutation, MutationRarity, MutationType
 from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
@@ -52,6 +54,40 @@ BOSS_ATTACK_COOLDOWN: timedelta = timedelta(minutes=30)
 REWARD_TIER_1: int = 1_000   # top-1
 REWARD_TIER_2_3: int = 500   # top-2 and top-3
 REWARD_ALL: int = 100        # every participant
+
+# Top-5 prize tables
+# mutation_rarity: None means no mutation prize
+PANDEMIC_REWARDS: list[dict] = [
+    {"place": 1, "bio": 2000, "premium": 50,  "mutation_rarity": "LEGENDARY"},
+    {"place": 2, "bio": 1500, "premium": 30,  "mutation_rarity": "RARE"},
+    {"place": 3, "bio": 1000, "premium": 20,  "mutation_rarity": "RARE"},
+    {"place": 4, "bio": 500,  "premium": 10,  "mutation_rarity": "UNCOMMON"},
+    {"place": 5, "bio": 300,  "premium": 5,   "mutation_rarity": "UNCOMMON"},
+]
+
+EVENT_REWARDS: list[dict] = [
+    {"place": 1, "bio": 1000, "premium": 25,  "mutation_rarity": None},
+    {"place": 2, "bio": 700,  "premium": 15,  "mutation_rarity": None},
+    {"place": 3, "bio": 500,  "premium": 10,  "mutation_rarity": None},
+    {"place": 4, "bio": 300,  "premium": 5,   "mutation_rarity": None},
+    {"place": 5, "bio": 200,  "premium": 0,   "mutation_rarity": None},
+]
+
+# Precomputed: mutation types grouped by rarity (for prize mutations)
+_TYPES_BY_RARITY: dict[MutationRarity, list[MutationType]] = {}
+
+
+def _get_types_by_rarity() -> dict[MutationRarity, list[MutationType]]:
+    """Lazily build mutation type lookup (avoids circular import at module load)."""
+    global _TYPES_BY_RARITY
+    if not _TYPES_BY_RARITY:
+        from bot.services.mutation import MUTATION_CONFIG
+        for rarity in MutationRarity:
+            _TYPES_BY_RARITY[rarity] = [
+                mt for mt, cfg in MUTATION_CONFIG.items()
+                if cfg["rarity"] == rarity and not cfg.get("is_debuff", False)
+            ]
+    return _TYPES_BY_RARITY
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -124,11 +160,14 @@ async def get_event_by_id(session: AsyncSession, event_id: int) -> Event | None:
     return result.scalar_one_or_none()
 
 
-async def expire_events(session: AsyncSession) -> int:
+async def expire_events(
+    session: AsyncSession,
+) -> tuple[int, list[dict]]:
     """
-    Deactivate all events whose ends_at has passed.
+    Deactivate all events whose ends_at has passed and distribute their prizes.
 
-    Returns the count of events deactivated.
+    Returns (count_deactivated, all_notifications).
+    Each notification dict: {"user_id": int, "message": str}.
     """
     now = _now_utc()
     result = await session.execute(
@@ -140,28 +179,36 @@ async def expire_events(session: AsyncSession) -> int:
         )
     )
     expired = list(result.scalars().all())
+    all_notifications: list[dict] = []
+
     for event in expired:
+        notifications = await distribute_event_rewards(session, event.id)
+        all_notifications.extend(notifications)
         event.is_active = False
 
     if expired:
         await session.flush()
         logger.info("Expired %d event(s).", len(expired))
 
-    return len(expired)
+    return len(expired), all_notifications
 
 
-async def stop_event(session: AsyncSession, event_id: int) -> bool:
+async def stop_event(
+    session: AsyncSession,
+    event_id: int,
+) -> tuple[bool, list[dict]]:
     """
-    Manually deactivate an event (admin action).
+    Manually deactivate an event (admin action) and distribute prizes.
 
-    Returns True if the event was found and deactivated, False otherwise.
+    Returns (was_stopped, notifications).
     """
     event = await get_event_by_id(session, event_id)
     if event is None or not event.is_active:
-        return False
+        return False, []
+    notifications = await distribute_event_rewards(session, event_id)
     event.is_active = False
     await session.flush()
-    return True
+    return True, notifications
 
 
 # ---------------------------------------------------------------------------
@@ -444,3 +491,219 @@ async def distribute_pandemic_rewards(session: AsyncSession, event_id: int) -> N
 
     await session.flush()
     logger.info("Pandemic rewards distributed for event_id=%d.", event_id)
+
+
+# ---------------------------------------------------------------------------
+# Activity tracking for non-PANDEMIC events
+# ---------------------------------------------------------------------------
+
+
+async def track_activity(
+    session: AsyncSession,
+    user_id: int,
+    activity_type: str,  # noqa: ARG001  — reserved for future per-type weighting
+) -> None:
+    """
+    Increment *user_id*'s activity_score in every currently active non-PANDEMIC event.
+
+    activity_type: 'mine' | 'attack' | 'upgrade'  (each = +1 point)
+    Fast-path: if no non-PANDEMIC events are active, does nothing.
+    """
+    now = _now_utc()
+    result = await session.execute(
+        select(Event).where(
+            and_(
+                Event.is_active == True,  # noqa: E712
+                Event.ends_at > now,
+                Event.event_type != EventType.PANDEMIC,
+            )
+        )
+    )
+    active_events = list(result.scalars().all())
+    if not active_events:
+        return
+
+    for event in active_events:
+        # Try to load existing participant row
+        ep_result = await session.execute(
+            select(EventParticipant).where(
+                and_(
+                    EventParticipant.event_id == event.id,
+                    EventParticipant.user_id == user_id,
+                )
+            ).with_for_update()
+        )
+        participant = ep_result.scalar_one_or_none()
+        if participant is None:
+            participant = EventParticipant(
+                event_id=event.id,
+                user_id=user_id,
+                activity_score=1,
+            )
+            session.add(participant)
+        else:
+            participant.activity_score += 1
+
+    await session.flush()
+
+
+async def get_event_leaderboard(
+    session: AsyncSession,
+    event_id: int,
+    limit: int = 10,
+) -> list[dict]:
+    """
+    Return top participants for a non-PANDEMIC event ordered by activity_score.
+
+    Each entry: {"rank": int, "user_id": int, "username": str, "score": int}
+    """
+    result = await session.execute(
+        select(EventParticipant, User)
+        .join(User, User.tg_id == EventParticipant.user_id)
+        .where(EventParticipant.event_id == event_id)
+        .order_by(EventParticipant.activity_score.desc())
+        .limit(limit)
+    )
+    rows = result.all()
+
+    leaderboard = []
+    for rank, (participant, user) in enumerate(rows, start=1):
+        leaderboard.append(
+            {
+                "rank": rank,
+                "user_id": user.tg_id,
+                "username": user.username or str(user.tg_id),
+                "score": participant.activity_score,
+            }
+        )
+    return leaderboard
+
+
+async def distribute_event_rewards(
+    session: AsyncSession,
+    event_id: int,
+) -> list[dict]:
+    """
+    Distribute top-5 prizes when an event ends (both PANDEMIC and regular events).
+
+    For PANDEMIC: uses PandemicParticipant.damage_dealt and PANDEMIC_REWARDS.
+    For others:   uses EventParticipant.activity_score and EVENT_REWARDS.
+
+    Returns list of {"user_id": int, "message": str} notifications.
+
+    This operation is atomic — all prizes are applied or none (caller must commit).
+    """
+    event = await get_event_by_id(session, event_id)
+    if event is None:
+        return []
+
+    is_pandemic = event.event_type == EventType.PANDEMIC
+
+    # --- Build ranked list of (user_id, score) ---
+    if is_pandemic:
+        leaderboard = await get_pandemic_leaderboard(session, event_id, limit=5)
+        ranked = [{"user_id": e["user_id"], "score": e["damage"], "rank": e["rank"]}
+                  for e in leaderboard]
+        reward_table = PANDEMIC_REWARDS
+    else:
+        leaderboard = await get_event_leaderboard(session, event_id, limit=5)
+        ranked = [{"user_id": e["user_id"], "score": e["score"], "rank": e["rank"]}
+                  for e in leaderboard]
+        reward_table = EVENT_REWARDS
+
+    if not ranked:
+        return []
+
+    types_by_rarity = _get_types_by_rarity()
+    notifications: list[dict] = []
+
+    for entry in ranked:
+        place = entry["rank"]
+        user_id = entry["user_id"]
+
+        # Find the matching reward tier
+        reward = next((r for r in reward_table if r["place"] == place), None)
+        if reward is None:
+            continue
+
+        bio_amount = reward["bio"]
+        premium_amount = reward["premium"]
+        rarity_str: str | None = reward["mutation_rarity"]
+
+        # Load user with row lock
+        user_result = await session.execute(
+            select(User).where(User.tg_id == user_id).with_for_update()
+        )
+        user: User | None = user_result.scalar_one_or_none()
+        if user is None:
+            continue
+
+        # Credit bio_coins
+        user.bio_coins += bio_amount
+        session.add(ResourceTransaction(
+            user_id=user_id,
+            amount=bio_amount,
+            currency=CurrencyType.BIO_COINS,
+            reason=TransactionReason.MINING,  # closest generic reason
+        ))
+
+        # Credit premium_coins
+        if premium_amount > 0:
+            user.premium_coins += premium_amount
+            session.add(ResourceTransaction(
+                user_id=user_id,
+                amount=premium_amount,
+                currency=CurrencyType.PREMIUM_COINS,
+                reason=TransactionReason.MINING,
+            ))
+
+        # Grant mutation of the specified rarity
+        mutation_desc = ""
+        if rarity_str is not None:
+            try:
+                rarity_enum = MutationRarity[rarity_str]
+            except KeyError:
+                rarity_enum = None
+
+            if rarity_enum is not None:
+                candidates = types_by_rarity.get(rarity_enum, [])
+                if candidates:
+                    chosen_type: MutationType = random.choice(candidates)
+                    from bot.services.mutation import MUTATION_CONFIG
+                    cfg = MUTATION_CONFIG[chosen_type]
+                    mutation = Mutation(
+                        owner_id=user_id,
+                        mutation_type=chosen_type,
+                        rarity=rarity_enum,
+                        effect_value=cfg["effect"],
+                        duration_hours=cfg["duration"],
+                        activated_at=_now_utc(),
+                        is_active=False,   # player activates manually
+                        is_used=False,
+                    )
+                    session.add(mutation)
+                    mutation_desc = f"\n🧬 Мутация в инвентаре: {cfg['description']} ({rarity_str.lower()})"
+
+        # Build place display
+        place_icons = {1: "🥇", 2: "🥈", 3: "🥉"}
+        place_str = place_icons.get(place, f"{place}.")
+
+        reward_lines = [f"+{bio_amount} 🧫"]
+        if premium_amount > 0:
+            reward_lines.append(f"+{premium_amount} 💎")
+
+        notifications.append({
+            "user_id": user_id,
+            "message": (
+                f"🏆 Ивент <b>{event.title}</b> завершён!\n"
+                f"Ты занял место {place_str} — "
+                f"{', '.join(reward_lines)}{mutation_desc}"
+            ),
+        })
+
+    await session.flush()
+    logger.info(
+        "Event rewards distributed for event_id=%d (type=%s, winners=%d).",
+        event_id, event.event_type.value, len(notifications),
+    )
+    return notifications

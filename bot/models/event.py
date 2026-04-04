@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -52,6 +53,11 @@ class Event(Base):
         back_populates="event",
         cascade="all, delete-orphan",
     )
+    event_participants: Mapped[list[EventParticipant]] = relationship(
+        "EventParticipant",
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return (
@@ -88,4 +94,36 @@ class PandemicParticipant(Base):
         return (
             f"<PandemicParticipant event={self.event_id}"
             f" user={self.user_id} dmg={self.damage_dealt}>"
+        )
+
+
+class EventParticipant(Base):
+    """Tracks player activity scores in non-PANDEMIC events (for top-5 prizes)."""
+
+    __tablename__ = "event_participants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("events.id", ondelete="CASCADE"),
+        index=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.tg_id", ondelete="CASCADE"),
+    )
+    # +1 per activity: mine, attack, upgrade
+    activity_score: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id", name="uq_event_participant"),
+    )
+
+    # Relationships
+    event: Mapped[Event] = relationship("Event", back_populates="event_participants")
+
+    def __repr__(self) -> str:
+        return (
+            f"<EventParticipant event={self.event_id}"
+            f" user={self.user_id} score={self.activity_score}>"
         )

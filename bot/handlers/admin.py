@@ -13,6 +13,7 @@ FSM flows:
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from html import escape
 
 from aiogram import F, Router
@@ -26,8 +27,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import get_settings
 from bot.keyboards.admin import (
+    EVENT_EMOJI,
+    EVENT_NAMES,
+    admin_event_detail_kb,
+    admin_event_duration_kb,
+    admin_event_stop_confirm_kb,
+    admin_event_types_kb,
+    admin_events_kb,
     admin_logs_kb,
     admin_menu_kb,
+    admin_pandemic_hp_kb,
     admin_player_kb,
     admin_promo_detail_kb,
     admin_promos_kb,
@@ -35,10 +44,18 @@ from bot.keyboards.admin import (
     confirm_give_kb,
 )
 from bot.models.alliance import Alliance
+from bot.models.event import EventType
 from bot.models.infection import Infection
 from bot.models.promo import PromoCode
 from bot.models.user import User
 from bot.services.admin import get_player_logs, give_currency, lookup_player, set_balance
+from bot.services.event import (
+    create_event,
+    get_active_events,
+    get_event_by_id,
+    start_pandemic,
+    stop_event,
+)
 from bot.services.promo import (
     activate_promo,
     create_promo,
@@ -998,3 +1015,293 @@ async def cb_admin_cancel(callback: CallbackQuery, state: FSMContext) -> None:
         parse_mode="HTML",
     )
     await callback.answer("Отменено.")
+
+
+# ---------------------------------------------------------------------------
+# Events management — callbacks
+# ---------------------------------------------------------------------------
+
+
+def _fmt_events_admin(events: list) -> str:
+    """Format active events list for admin panel."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+    text = "🌍 <b>Управление ивентами</b>\n\n"
+    if events:
+        text += "<b>Активные ивенты:</b>\n"
+        for e in events:
+            emoji = EVENT_EMOJI.get(e.event_type, "🌍")
+            delta = (e.ends_at - now).total_seconds()
+            remaining_h = max(0, delta / 3600)
+            text += f"{emoji} {escape(e.title)} — ещё {remaining_h:.0f}ч\n"
+    else:
+        text += "Нет активных ивентов."
+    return text
+
+
+@router.callback_query(F.data == "admin_events")
+async def cb_admin_events(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Show event management menu."""
+    if not _is_admin(callback.from_user.id):
+        await _deny(None, callback)
+        return
+
+    events = await get_active_events(session)
+    await callback.message.edit_text(
+        _fmt_events_admin(events),
+        reply_markup=admin_events_kb(events),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_event_types")
+async def cb_admin_event_types(callback: CallbackQuery) -> None:
+    """Show event type selection."""
+    if not _is_admin(callback.from_user.id):
+        await _deny(None, callback)
+        return
+
+    await callback.message.edit_text(
+        "🌍 <b>Выберите тип ивента</b>",
+        reply_markup=admin_event_types_kb(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_evt_create:"))
+async def cb_admin_evt_create(callback: CallbackQuery) -> None:
+    """Show duration selection for the chosen event type."""
+    if not _is_admin(callback.from_user.id):
+        await _deny(None, callback)
+        return
+
+    event_type_str = callback.data.removeprefix("admin_evt_create:")
+    # Validate that the type is known
+    try:
+        et = EventType(event_type_str)
+    except ValueError:
+        await callback.answer("Неизвестный тип ивента.", show_alert=True)
+        return
+
+    emoji = EVENT_EMOJI.get(et, "🌍")
+    name = EVENT_NAMES.get(et, event_type_str)
+    await callback.message.edit_text(
+        f"🌍 <b>Создать ивент: {emoji} {name}</b>\n\n"
+        "Выберите длительность:",
+        reply_markup=admin_event_duration_kb(event_type_str),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_evt_dur:"))
+async def cb_admin_evt_dur(callback: CallbackQuery, session: AsyncSession) -> None:
+    """
+    Handle duration selection.
+
+    For PANDEMIC: show HP selection screen.
+    For all others: create the event immediately.
+    """
+    if not _is_admin(callback.from_user.id):
+        await _deny(None, callback)
+        return
+
+    # Format: admin_evt_dur:{type}:{hours}
+    parts = callback.data.removeprefix("admin_evt_dur:").split(":")
+    if len(parts) != 2:
+        await callback.answer("Неверный формат.", show_alert=True)
+        return
+
+    event_type_str, hours_str = parts
+    try:
+        et = EventType(event_type_str)
+        duration = int(hours_str)
+    except (ValueError, KeyError):
+        await callback.answer("Неверные параметры.", show_alert=True)
+        return
+
+    # Pandemic needs extra step — boss HP selection
+    if et == EventType.PANDEMIC:
+        emoji = EVENT_EMOJI[et]
+        name = EVENT_NAMES[et]
+        await callback.message.edit_text(
+            f"💀 <b>Пандемия — выберите HP босса</b>\n\n"
+            f"Длительность: <b>{duration}ч</b>",
+            reply_markup=admin_pandemic_hp_kb(duration),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
+    # Create non-pandemic event
+    emoji = EVENT_EMOJI.get(et, "🌍")
+    name = EVENT_NAMES.get(et, et.value)
+    description = f"Активное событие: {name}."
+    event = await create_event(
+        session=session,
+        event_type=et,
+        title=name,
+        description=description,
+        duration_hours=duration,
+        created_by=callback.from_user.id,
+    )
+
+    ends_str = event.ends_at.strftime("%d.%m.%Y %H:%M")
+    await callback.message.edit_text(
+        f"✅ <b>Ивент создан!</b>\n\n"
+        f"{emoji} {name}\n"
+        f"⏱ Длительность: {duration} ч\n"
+        f"📅 До: {ends_str} UTC",
+        reply_markup=admin_event_detail_kb(event.id),
+        parse_mode="HTML",
+    )
+    await callback.answer("✅ Ивент запущен!")
+
+
+@router.callback_query(F.data.startswith("admin_pandemic:"))
+async def cb_admin_pandemic(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Create pandemic event with chosen duration and boss HP."""
+    if not _is_admin(callback.from_user.id):
+        await _deny(None, callback)
+        return
+
+    # Format: admin_pandemic:{duration}:{boss_hp}
+    parts = callback.data.removeprefix("admin_pandemic:").split(":")
+    if len(parts) != 2:
+        await callback.answer("Неверный формат.", show_alert=True)
+        return
+
+    try:
+        duration = int(parts[0])
+        boss_hp = int(parts[1])
+    except ValueError:
+        await callback.answer("Неверные параметры.", show_alert=True)
+        return
+
+    event = await start_pandemic(
+        session=session,
+        boss_hp=boss_hp,
+        duration_hours=duration,
+        created_by=callback.from_user.id,
+    )
+
+    ends_str = event.ends_at.strftime("%d.%m.%Y %H:%M")
+    await callback.message.edit_text(
+        f"✅ <b>Ивент создан!</b>\n\n"
+        f"💀 Пандемия — Босс-вирус\n"
+        f"💀 HP босса: {boss_hp:,}\n"
+        f"⏱ Длительность: {duration} ч\n"
+        f"📅 До: {ends_str} UTC",
+        reply_markup=admin_event_detail_kb(event.id),
+        parse_mode="HTML",
+    )
+    await callback.answer("✅ Пандемия запущена!")
+
+
+@router.callback_query(F.data.startswith("admin_evt_detail:"))
+async def cb_admin_evt_detail(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Show details for a specific active event."""
+    if not _is_admin(callback.from_user.id):
+        await _deny(None, callback)
+        return
+
+    try:
+        event_id = int(callback.data.removeprefix("admin_evt_detail:"))
+    except ValueError:
+        await callback.answer("Неверный ID.", show_alert=True)
+        return
+
+    event = await get_event_by_id(session, event_id)
+    if event is None or not event.is_active:
+        await callback.answer("Ивент не найден или уже завершён.", show_alert=True)
+        events = await get_active_events(session)
+        await callback.message.edit_text(
+            _fmt_events_admin(events),
+            reply_markup=admin_events_kb(events),
+            parse_mode="HTML",
+        )
+        return
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    emoji = EVENT_EMOJI.get(event.event_type, "🌍")
+    name = EVENT_NAMES.get(event.event_type, event.event_type.value)
+    delta = max(0, (event.ends_at - now).total_seconds())
+    remaining_h = delta / 3600
+    ends_str = event.ends_at.strftime("%d.%m.%Y %H:%M")
+    text = (
+        f"{emoji} <b>{escape(event.title)}</b>\n\n"
+        f"Тип: <b>{name}</b>\n"
+        f"ID: <code>{event.id}</code>\n"
+        f"⏳ Осталось: <b>{remaining_h:.1f}ч</b>\n"
+        f"📅 До: {ends_str} UTC"
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=admin_event_detail_kb(event_id),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_evt_stop_ask:"))
+async def cb_admin_evt_stop_ask(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Ask for confirmation before stopping an event."""
+    if not _is_admin(callback.from_user.id):
+        await _deny(None, callback)
+        return
+
+    try:
+        event_id = int(callback.data.removeprefix("admin_evt_stop_ask:"))
+    except ValueError:
+        await callback.answer("Неверный ID.", show_alert=True)
+        return
+
+    event = await get_event_by_id(session, event_id)
+    if event is None or not event.is_active:
+        await callback.answer("Ивент уже завершён.", show_alert=True)
+        events = await get_active_events(session)
+        await callback.message.edit_text(
+            _fmt_events_admin(events),
+            reply_markup=admin_events_kb(events),
+            parse_mode="HTML",
+        )
+        return
+
+    emoji = EVENT_EMOJI.get(event.event_type, "🌍")
+    await callback.message.edit_text(
+        f"⚠️ <b>Остановить ивент?</b>\n\n"
+        f"{emoji} {escape(event.title)}\n\n"
+        "Это действие нельзя отменить.",
+        reply_markup=admin_event_stop_confirm_kb(event_id),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_evt_stop:"))
+async def cb_admin_evt_stop(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Stop an active event after confirmation."""
+    if not _is_admin(callback.from_user.id):
+        await _deny(None, callback)
+        return
+
+    try:
+        event_id = int(callback.data.removeprefix("admin_evt_stop:"))
+    except ValueError:
+        await callback.answer("Неверный ID.", show_alert=True)
+        return
+
+    success = await stop_event(session, event_id)
+
+    events = await get_active_events(session)
+    if success:
+        await callback.answer(f"✅ Ивент #{event_id} остановлен.", show_alert=True)
+    else:
+        await callback.answer(f"Ивент #{event_id} не найден или уже завершён.", show_alert=True)
+
+    await callback.message.edit_text(
+        _fmt_events_admin(events),
+        reply_markup=admin_events_kb(events),
+        parse_mode="HTML",
+    )

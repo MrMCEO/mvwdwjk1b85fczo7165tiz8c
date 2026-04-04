@@ -104,7 +104,7 @@ async def test_expire_events_deactivates_old_events(session: AsyncSession):
     session.add(expired_event)
     await session.flush()
 
-    count = await expire_events(session)
+    count, _notifications = await expire_events(session)
     assert count >= 1
 
     await session.refresh(expired_event)

@@ -30,6 +30,8 @@ from bot.models.infection import Infection
 from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
+from bot.services.alliance import get_alliance_regen_bonus
+from bot.services.event import expire_events
 from bot.services.premium import format_username
 from bot.services.referral import deactivate_stale_referrals
 
@@ -166,7 +168,8 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                 if u.branch == ImmunityBranch.REGENERATION and u.level > 0:
                     regen_bonus = u.effect_value
                     break
-        cure_chance = BASE_CURE_CHANCE + recovery_speed + regen_bonus
+        alliance_regen = await get_alliance_regen_bonus(session, victim.tg_id)
+        cure_chance = BASE_CURE_CHANCE + recovery_speed + regen_bonus + alliance_regen
         cure_chance = max(0.0, min(0.80, cure_chance))  # cap at 80% — infection should always have some duration
 
         if random.random() < cure_chance:
@@ -218,6 +221,13 @@ async def start_scheduler(bot) -> None:  # bot: aiogram.Bot
                     logger.info(
                         "Scheduler: deactivated %d stale referral(s).", stale_count
                     )
+                expired_count, event_notifications = await expire_events(session)
+                if expired_count:
+                    logger.info(
+                        "Scheduler: expired %d event(s), %d prize notification(s).",
+                        expired_count, len(event_notifications),
+                    )
+                    notifications.extend(event_notifications)
                 await session.commit()
             except Exception:
                 await session.rollback()
@@ -230,6 +240,7 @@ async def start_scheduler(bot) -> None:  # bot: aiogram.Bot
                 await bot.send_message(
                     chat_id=note["user_id"],
                     text=note["message"],
+                    parse_mode="HTML",
                 )
             except Exception as exc:
                 # User may have blocked the bot — log and continue

@@ -24,10 +24,16 @@ from sqlalchemy.orm import selectinload
 from bot.models.attack_log import AttackAttempt
 from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade
 from bot.models.infection import Infection
+from bot.models.item import ItemType
 from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
+from bot.services.alliance import get_alliance_attack_bonus, get_alliance_defense_bonus
+from bot.services.event import get_event_modifier
+from bot.services.laboratory import get_active_item_effect
+from bot.services.market import check_contract_completion
+from bot.services.mutation_effects import apply_mutation_to_attack, apply_mutation_to_defense
 from bot.services.premium import get_attack_cooldown, get_attack_limits
 
 # Base damage per tick before lethality adjustments
@@ -231,11 +237,53 @@ async def attack_player(
     effective_detection = max(0.0, (immunity.detection_power + detection_effect) - stealth_effect)
     defense_score += effective_detection * 5.0  # balanced: detection matters but not dominant
 
+    # --- Event modifiers ---
+    can_attack = await get_event_modifier(session, "can_attack")
+    if not can_attack:
+        return False, "Сейчас действует перемирие (🕊 Ceasefire). Атаки запрещены."
+
+    attack_chance_mult = await get_event_modifier(session, "attack_chance_mult")
+    attack_score *= attack_chance_mult
+
+    defense_mult = await get_event_modifier(session, "defense_mult")
+    defense_score *= defense_mult
+
+    # --- Mutation modifiers (attacker) ---
+    atk_mods = await apply_mutation_to_attack(session, attacker_id)
+    attack_score *= atk_mods.get("attack_mult", 1.0)
+    attack_score *= atk_mods.get("spread_mult", 1.0)
+
+    # --- Mutation modifiers (defender) ---
+    def_mods = await apply_mutation_to_defense(session, victim_id)
+    defense_score *= def_mods.get("defense_mult", 1.0)
+
+    if def_mods.get("absolute_immunity"):
+        return False, "Цель под защитой Абсолютного иммунитета! Атака невозможна."
+
+    # --- Alliance bonuses ---
+    atk_alliance_bonus = await get_alliance_attack_bonus(session, attacker_id)
+    attack_score *= (1.0 + atk_alliance_bonus)
+
+    def_alliance_bonus = await get_alliance_defense_bonus(session, victim_id)
+    defense_score *= (1.0 + def_alliance_bonus)
+
+    # --- Laboratory item effects ---
+    has_bio_bomb = await get_active_item_effect(session, attacker_id, ItemType.BIO_BOMB)
+    has_enhancer = await get_active_item_effect(session, attacker_id, ItemType.VIRUS_ENHANCER)
+    has_cloak = await get_active_item_effect(session, attacker_id, ItemType.STEALTH_CLOAK)  # noqa: F841 (reserved for future use)
+    has_shield = await get_active_item_effect(session, victim_id, ItemType.SHIELD_BOOST)
+
+    if has_shield:
+        defense_score *= 1.5
+
     # --- Infection probability ---
     # With defaults: attack=10, defense=10+(0.1*5)=10.5, chance=10/20.5=48.8% — close to target 45%
     total = attack_score + defense_score
-    chance: float = attack_score / total if total > 0 else 0.0
-    chance = max(0.05, min(0.95, chance))  # floor 5%, cap 95% — always a small chance either way
+    if has_bio_bomb:
+        chance: float = 0.95  # near-guaranteed attack (leave 5% for the unexpected)
+    else:
+        chance = attack_score / total if total > 0 else 0.0
+        chance = max(0.05, min(0.95, chance))  # floor 5%, cap 95% — always a small chance either way
 
     roll = random.random()
     success = roll < chance
@@ -265,6 +313,10 @@ async def attack_player(
 
     damage_per_tick = max(1.0, BASE_DAMAGE_PER_TICK + lethality_effect)
 
+    # Virus Enhancer item: double damage for this attack
+    if has_enhancer:
+        damage_per_tick *= 2.0
+
     # --- Create Infection ---
     infection = Infection(
         attacker_id=attacker_id,
@@ -283,6 +335,13 @@ async def attack_player(
     )
     session.add(attempt)
     await session.flush()
+
+    # --- Check hit-contract completion ---
+    await check_contract_completion(session, attacker_id, victim_id)
+
+    # Track activity for event leaderboards
+    from bot.services.event import track_activity
+    await track_activity(session, attacker_id, "attack")
 
     victim_display = victim.username or str(victim_id)
     return True, (

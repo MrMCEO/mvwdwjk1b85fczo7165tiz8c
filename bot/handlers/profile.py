@@ -84,7 +84,7 @@ def _fmt_profile(data: dict) -> str:
     status_name = f"{cfg.get('emoji', '')} {cfg.get('name', 'Бесплатный')}".strip()
 
     if status in (UserStatus.BIO_LEGEND, UserStatus.OWNER):
-        lines.append(f"🏅 Статус: <b>{status_name}</b> (навсе��да)")
+        lines.append(f"🏅 Статус: <b>{status_name}</b> (навсегда)")
     elif premium_active and u.get("premium_until"):
         until_str = u["premium_until"].strftime("%d.%m.%Y")
         lines.append(f"🏅 Статус: <b>{status_name}</b> (до {until_str})")

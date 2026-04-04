@@ -28,11 +28,12 @@ async def get_top_infections(session: AsyncSession, limit: int = 10) -> list[dic
             User.display_name.label("display_name"),
             User.premium_until.label("premium_until"),
             User.premium_prefix.label("premium_prefix"),
+            User.status.label("status"),
             func.count(Infection.id).label("count"),
         )
         .join(User, User.tg_id == Infection.attacker_id)
         .where(Infection.is_active == True)  # noqa: E712
-        .group_by(Infection.attacker_id, User.username, User.display_name, User.premium_until, User.premium_prefix)
+        .group_by(Infection.attacker_id, User.username, User.display_name, User.premium_until, User.premium_prefix, User.status)
         .order_by(desc("count"))
         .limit(limit)
     )
@@ -46,6 +47,7 @@ async def get_top_infections(session: AsyncSession, limit: int = 10) -> list[dic
             "count": row.count,
             "premium_until": row.premium_until,
             "premium_prefix": row.premium_prefix,
+            "status": row.status,
         }
         for row in rows
     ]
@@ -64,6 +66,7 @@ async def get_top_virus_level(session: AsyncSession, limit: int = 10) -> list[di
             User.display_name.label("display_name"),
             User.premium_until.label("premium_until"),
             User.premium_prefix.label("premium_prefix"),
+            User.status.label("status"),
             Virus.name.label("virus_name"),
             Virus.name_entities_json.label("virus_name_entities"),
             Virus.level.label("level"),
@@ -84,6 +87,7 @@ async def get_top_virus_level(session: AsyncSession, limit: int = 10) -> list[di
             "level": row.level,
             "premium_until": row.premium_until,
             "premium_prefix": row.premium_prefix,
+            "status": row.status,
         }
         for row in rows
     ]
@@ -102,6 +106,7 @@ async def get_top_immunity_level(session: AsyncSession, limit: int = 10) -> list
             User.display_name.label("display_name"),
             User.premium_until.label("premium_until"),
             User.premium_prefix.label("premium_prefix"),
+            User.status.label("status"),
             Immunity.level.label("level"),
         )
         .join(Immunity, Immunity.owner_id == User.tg_id)
@@ -118,6 +123,7 @@ async def get_top_immunity_level(session: AsyncSession, limit: int = 10) -> list
             "level": row.level,
             "premium_until": row.premium_until,
             "premium_prefix": row.premium_prefix,
+            "status": row.status,
         }
         for row in rows
     ]
@@ -136,6 +142,7 @@ async def get_top_richest(session: AsyncSession, limit: int = 10) -> list[dict]:
             User.display_name.label("display_name"),
             User.premium_until.label("premium_until"),
             User.premium_prefix.label("premium_prefix"),
+            User.status.label("status"),
             User.bio_coins.label("bio_coins"),
         )
         .order_by(desc(User.bio_coins))
@@ -151,6 +158,7 @@ async def get_top_richest(session: AsyncSession, limit: int = 10) -> list[dict]:
             "bio_coins": row.bio_coins,
             "premium_until": row.premium_until,
             "premium_prefix": row.premium_prefix,
+            "status": row.status,
         }
         for row in rows
     ]

@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.models.mutation import Mutation, MutationRarity, MutationType
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
+from bot.services.event import get_event_modifier
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -190,7 +191,10 @@ async def roll_mutation(session: AsyncSession, user_id: int) -> Mutation | None:
 
     Returns the newly created and flushed Mutation, or None if no mutation occurred.
     """
-    if random.random() >= MUTATION_ROLL_CHANCE:
+    # Event modifier (Mutation Storm = x3 chance)
+    mutation_mult = await get_event_modifier(session, "mutation_chance_mult")
+    roll_chance = MUTATION_ROLL_CHANCE * mutation_mult
+    if random.random() >= roll_chance:
         return None
 
     # Выбираем редкость по весам

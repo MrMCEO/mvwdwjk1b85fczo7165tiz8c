@@ -17,6 +17,7 @@ from bot.handlers.rating import router as rating_router
 from bot.handlers.resources import router as resources_router
 from bot.handlers.shop import router as shop_router
 from bot.handlers.start import router as start_router
+from bot.handlers.text_commands import router as text_commands_router
 from bot.handlers.virus import router as virus_router
 from bot.middlewares.db import DbSessionMiddleware
 from bot.models.base import init_db
@@ -67,6 +68,8 @@ async def main() -> None:
     dp.include_router(shop_router)
     dp.include_router(profile_router)
     dp.include_router(rating_router)
+    # Text commands MUST be last — otherwise may intercept FSM input (e.g. attack username)
+    dp.include_router(text_commands_router)
 
     logger.info("Starting polling...")
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())

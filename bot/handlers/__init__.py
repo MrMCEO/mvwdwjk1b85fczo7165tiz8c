@@ -7,6 +7,7 @@ from bot.handlers.rating import router as rating_router
 from bot.handlers.resources import router as resources_router
 from bot.handlers.shop import router as shop_router
 from bot.handlers.start import router as start_router
+from bot.handlers.text_commands import router as text_commands_router
 from bot.handlers.virus import router as virus_router
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "profile_router",
     "rating_router",
     "info_router",
+    "text_commands_router",
 ]

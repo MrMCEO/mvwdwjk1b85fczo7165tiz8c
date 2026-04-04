@@ -19,7 +19,9 @@ from bot.handlers.virus import _fmt_virus_stats
 from bot.keyboards.alliance import alliance_info_kb, alliance_no_clan_kb
 from bot.keyboards.attack import attack_menu_kb
 from bot.keyboards.immunity import immunity_menu_kb
+from bot.keyboards.laboratory import lab_menu_kb
 from bot.keyboards.main import main_menu_kb
+from bot.keyboards.market import market_menu_kb
 from bot.keyboards.profile import profile_kb
 from bot.keyboards.rating import rating_menu_kb
 from bot.keyboards.resources import resources_menu_kb
@@ -27,6 +29,7 @@ from bot.keyboards.shop import shop_menu_kb
 from bot.keyboards.virus import virus_menu_kb
 from bot.services.alliance import get_alliance_info
 from bot.services.donation import EXCHANGE_RATE
+from bot.services.laboratory import get_inventory
 from bot.services.player import get_or_create_player, get_player_profile
 from bot.services.resource import get_balance
 from bot.services.upgrade import get_immunity_stats, get_virus_stats
@@ -56,6 +59,14 @@ _INFO_TRIGGERS = {"инфо", "помощь", "гайд", "как играть"}
 _PROFILE_TRIGGERS = {"мой профиль", "📊 мой профиль"}
 
 _ALLIANCE_TRIGGERS = {"альянс", "клан", "🏰 альянс"}
+
+_EVENTS_TRIGGERS = {"ивент", "ивенты", "события", "🌍 ивенты"}
+
+_LAB_TRIGGERS = {"лаборатория", "лаба", "крафт", "инвентарь", "🔬 лаборатория"}
+
+_MARKET_TRIGGERS = {"рынок", "чёрный рынок", "маркет", "торговля", "🏴‍☠️ чёрный рынок"}
+
+_ADMIN_TRIGGERS = {"админ", "admin", "⚙️ admin", "⚙️ админ"}
 
 
 # ---------------------------------------------------------------------------
@@ -226,3 +237,94 @@ async def text_alliance(message: Message, session: AsyncSession) -> None:
             reply_markup=alliance_info_kb(info["user_role"]),
             parse_mode="HTML",
         )
+
+
+# ---------------------------------------------------------------------------
+# Ивенты
+# ---------------------------------------------------------------------------
+
+
+@router.message(F.text.lower().in_(_EVENTS_TRIGGERS))
+async def text_events(message: Message, session: AsyncSession) -> None:
+    """Текстовая команда: показать список активных ивентов."""
+    from bot.keyboards.events import events_menu_kb, EVENT_EMOJI
+    from bot.models.event import EventType
+    from bot.services.event import get_active_events
+
+    events = await get_active_events(session)
+
+    if not events:
+        text = (
+            "🌍 <b>Ивенты</b>\n\n"
+            "Сейчас нет активных ивентов.\n\n"
+            "Возвращайся позже — администраторы регулярно запускают события!"
+        )
+    else:
+        lines = ["🌍 <b>Активные ивенты</b>\n"]
+        for event in events:
+            emoji = EVENT_EMOJI.get(event.event_type, "🌍")
+            lines.append(f"{emoji} <b>{event.title}</b>")
+        lines.append("\nВыбери ивент для подробностей:")
+        text = "\n".join(lines)
+
+    await message.answer(text, reply_markup=events_menu_kb(events), parse_mode="HTML")
+
+
+# ---------------------------------------------------------------------------
+# Лаборатория
+# ---------------------------------------------------------------------------
+
+
+@router.message(F.text.lower().in_(_LAB_TRIGGERS))
+async def text_laboratory(message: Message, session: AsyncSession) -> None:
+    """Текстовая команда: показать меню лаборатории."""
+    inventory = await get_inventory(session, message.from_user.id)
+    total_items = sum(i["count"] for i in inventory)
+
+    text = (
+        "🔬 <b>Лаборатория</b>\n\n"
+        "Здесь ты можешь крафтить предметы за bio_coins.\n"
+        "Предметы одноразовые и хранятся в инвентаре.\n\n"
+        f"📦 Предметов в инвентаре: <b>{total_items}</b>"
+    )
+    await message.answer(text, reply_markup=lab_menu_kb(), parse_mode="HTML")
+
+
+# ---------------------------------------------------------------------------
+# Чёрный рынок
+# ---------------------------------------------------------------------------
+
+
+@router.message(F.text.lower().in_(_MARKET_TRIGGERS))
+async def text_market(message: Message) -> None:
+    """Текстовая команда: показать меню чёрного рынка."""
+    await message.answer(
+        "🏴‍☠️ <b>Чёрный рынок</b>\n\n"
+        "Торгуй ресурсами с другими игроками или размести контракт на заражение.",
+        reply_markup=market_menu_kb(),
+        parse_mode="HTML",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Админ-панель
+# ---------------------------------------------------------------------------
+
+
+@router.message(F.text.lower().in_(_ADMIN_TRIGGERS))
+async def text_admin(message: Message) -> None:
+    """Текстовая команда: открыть админ-панель (только для администраторов)."""
+    from bot.config import get_settings
+    from bot.keyboards.admin import admin_menu_kb
+
+    if message.from_user.id not in get_settings().admin_ids:
+        await message.answer("⛔ Доступ запрещён. Эта команда только для администраторов.")
+        return
+
+    await message.answer(
+        "⚙️ <b>Админ-панель</b>\n\n"
+        "Добро пожаловать в панель управления BioWars.\n"
+        "Выберите раздел:",
+        reply_markup=admin_menu_kb(),
+        parse_mode="HTML",
+    )

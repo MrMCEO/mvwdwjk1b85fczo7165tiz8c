@@ -9,6 +9,7 @@ from bot.models.base import Base
 if TYPE_CHECKING:
     from bot.models.immunity import Immunity
     from bot.models.infection import Infection
+    from bot.models.item import Item
     from bot.models.mutation import Mutation
     from bot.models.resource import ResourceTransaction
     from bot.models.virus import Virus
@@ -56,6 +57,9 @@ class User(Base):
     )
     mutations: Mapped[list["Mutation"]] = relationship(
         "Mutation", back_populates="owner", cascade="all, delete-orphan"
+    )
+    items: Mapped[list["Item"]] = relationship(
+        "Item", back_populates="owner", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

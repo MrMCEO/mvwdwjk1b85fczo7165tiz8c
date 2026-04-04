@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.models.alliance import AllianceRole
+from bot.services.alliance import ALLIANCE_UPGRADE_CONFIG
 
 
 def alliance_no_clan_kb() -> InlineKeyboardMarkup:
@@ -24,7 +25,7 @@ def alliance_info_kb(role: AllianceRole) -> InlineKeyboardMarkup:
 
     Buttons depend on the viewer's role:
     - Everyone: Участники, Покинуть, Назад
-    - LEADER/OFFICER: + Пригласить, Кикнуть
+    - LEADER/OFFICER: + Пригласить, Кикнуть, Улучшения
     - LEADER only: + Распустить
     """
     builder = InlineKeyboardBuilder()
@@ -34,6 +35,7 @@ def alliance_info_kb(role: AllianceRole) -> InlineKeyboardMarkup:
     if role in (AllianceRole.LEADER, AllianceRole.OFFICER):
         builder.button(text="➕ Пригласить",  callback_data="alliance_invite")
         builder.button(text="🚫 Кикнуть",     callback_data="alliance_kick_list")
+        builder.button(text="🔧 Улучшения",   callback_data="alliance_upgrades")
 
     builder.button(text="🚪 Покинуть",        callback_data="alliance_leave")
 
@@ -161,4 +163,40 @@ def alliance_confirm_leave_kb() -> InlineKeyboardMarkup:
     builder.button(text="🚪 Да, покинуть", callback_data="alliance_leave_confirm")
     builder.button(text="❌ Отмена",        callback_data="alliance_menu")
     builder.adjust(2)
+    return builder.as_markup()
+
+
+def alliance_upgrades_kb(
+    upgrades: dict,
+    role: AllianceRole,
+    balance: int,
+) -> InlineKeyboardMarkup:
+    """
+    Upgrade screen keyboard.
+
+    Shows one button per upgrade (disabled/max label if maxed).
+    For LEADER/OFFICER: includes 'Buy AllianceCoins' button.
+    Always includes Back button.
+    """
+    builder = InlineKeyboardBuilder()
+
+    for key, data in upgrades.items():
+        cfg = ALLIANCE_UPGRADE_CONFIG[key]
+        level = data["level"]
+        max_level = data["max_level"]
+
+        if level >= max_level:
+            label = f"{cfg['emoji']} {cfg['name']}: МАКС ({max_level})"
+        else:
+            next_cost = data["next_cost"]
+            can_afford = "✅" if balance >= next_cost else "❌"
+            label = f"{can_afford} {cfg['emoji']} {cfg['name']}: ур.{level} → {next_cost} 🔷"
+
+        builder.button(text=label, callback_data=f"alliance_upgrade_{key}")
+
+    if role in (AllianceRole.LEADER, AllianceRole.OFFICER):
+        builder.button(text="💎 Купить 🔷 AllianceCoins", callback_data="alliance_buy_coins")
+
+    builder.button(text="◀️ Назад", callback_data="alliance_menu")
+    builder.adjust(1)
     return builder.as_markup()

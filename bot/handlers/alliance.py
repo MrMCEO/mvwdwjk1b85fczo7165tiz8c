@@ -5,6 +5,7 @@ FSM flows:
   - AllianceCreateStates: waiting_for_name → waiting_for_tag → confirm
   - AllianceInviteStates: waiting_for_username
   - AllianceSearchStates: waiting_for_query
+  - AllianceBuyCoinsStates: waiting_for_amount
 """
 
 from __future__ import annotations
@@ -25,21 +26,28 @@ from bot.keyboards.alliance import (
     alliance_members_kb,
     alliance_no_clan_kb,
     alliance_search_kb,
+    alliance_upgrades_kb,
 )
 from bot.keyboards.common import back_button, confirm_cancel_kb
 from bot.models.alliance import ROLE_LABELS, Alliance, AllianceMember, AllianceRole
 from bot.services.alliance import (
     ALLIANCE_CREATE_COST,
+    ALLIANCE_UPGRADE_CONFIG,
+    MAX_MEMBERS_DEFAULT,
+    buy_alliance_coins,
     create_alliance,
     demote_member,
     dissolve_alliance,
     get_alliance_info,
+    get_alliance_max_members,
     get_alliance_members,
+    get_alliance_upgrades,
     invite_player,
     kick_member,
     leave_alliance,
     promote_member,
     search_alliances,
+    upgrade_alliance,
 )
 
 router = Router(name="alliance")
@@ -64,6 +72,10 @@ class AllianceSearchStates(StatesGroup):
     waiting_for_query = State()
 
 
+class AllianceBuyCoinsStates(StatesGroup):
+    waiting_for_amount = State()
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -74,12 +86,14 @@ def _fmt_alliance_info(info: dict) -> str:
     bonus_pct = int(info["defense_bonus"] * 100)
     role_label = ROLE_LABELS.get(info["user_role"], "")
     created = info["created_at"].strftime("%d.%m.%Y") if info["created_at"] else "—"
+    coins = info.get("alliance_coins", 0)
 
     return (
         f"🏰 <b>[{escape(info['tag'])}] {escape(info['name'])}</b>\n\n"
         f"👑 Лидер: <b>{info['leader_username']}</b>\n"
         f"👥 Участников: <b>{info['member_count']}/{info['max_members']}</b>\n"
         f"🛡 Бонус защиты: <b>+{bonus_pct}%</b>\n"
+        f"🔷 Казна: <b>{coins} AllianceCoins</b>\n"
         f"📅 Создан: <b>{created}</b>\n\n"
         f"Твоя роль: <b>{role_label}</b>"
         + (f"\n\n📝 {escape(info['description'])}" if info.get("description") else "")
@@ -665,9 +679,10 @@ async def cb_alliance_join(
         )
     )
     count: int = count_result.scalar_one()
-    if count >= alliance.max_members:
+    max_members = await get_alliance_max_members(session, alliance_id)
+    if count >= max_members:
         await callback.answer(
-            f"❌ Альянс заполнен ({count}/{alliance.max_members}).", show_alert=True
+            f"❌ Альянс заполнен ({count}/{max_members}).", show_alert=True
         )
         return
 
@@ -688,3 +703,154 @@ async def cb_alliance_join(
         parse_mode="HTML",
     )
     await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# Upgrades screen
+# ---------------------------------------------------------------------------
+
+
+def _fmt_upgrades_text(info: dict, upgrades: dict) -> str:
+    """Format the upgrades screen text."""
+    lines = [
+        f"🏰 <b>Улучшения альянса [{escape(info['tag'])}]</b>",
+        f"🔷 Баланс: <b>{info['alliance_coins']} AllianceCoins</b>",
+        "",
+    ]
+
+    for key, data in upgrades.items():
+        cfg = ALLIANCE_UPGRADE_CONFIG[key]
+        level = data["level"]
+        effect = data["effect"]
+        next_cost = data["next_cost"]
+
+        if key == "capacity":
+            effect_str = f"{MAX_MEMBERS_DEFAULT + int(level * cfg['effect_per_level'])} слотов"
+        elif key in ("shield", "morale", "mining"):
+            effect_str = f"+{int(effect * 100)}%"
+        else:  # regen
+            effect_str = f"+{effect * 100:.0f}%"
+
+        if level >= data["max_level"]:
+            lines.append(f"{cfg['emoji']} {cfg['name']}: ур. {level} ({effect_str}) — МАКС")
+        else:
+            lines.append(
+                f"{cfg['emoji']} {cfg['name']}: ур. {level} ({effect_str}) "
+                f"→ ур. {level + 1} стоит {next_cost} 🔷"
+            )
+
+    return "\n".join(lines)
+
+
+@router.callback_query(lambda c: c.data == "alliance_upgrades")
+async def cb_alliance_upgrades(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Show the alliance upgrades screen."""
+    info = await get_alliance_info(session, callback.from_user.id)
+    if info is None:
+        await callback.answer("❌ Ты не в альянсе.", show_alert=True)
+        return
+
+    if info["user_role"] not in (AllianceRole.LEADER, AllianceRole.OFFICER):
+        await callback.answer("❌ Только лидер или офицер могут просматривать улучшения.", show_alert=True)
+        return
+
+    upgrades = await get_alliance_upgrades(session, info["id"])
+    text = _fmt_upgrades_text(info, upgrades)
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=alliance_upgrades_kb(upgrades, info["user_role"], info["alliance_coins"]),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("alliance_upgrade_"))
+async def cb_alliance_upgrade(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Perform a specific upgrade."""
+    upgrade_key = callback.data[len("alliance_upgrade_"):]
+
+    success, msg = await upgrade_alliance(session, callback.from_user.id, upgrade_key)
+
+    if success:
+        info = await get_alliance_info(session, callback.from_user.id)
+        if info:
+            upgrades = await get_alliance_upgrades(session, info["id"])
+            text = _fmt_upgrades_text(info, upgrades)
+            await callback.message.edit_text(
+                text,
+                reply_markup=alliance_upgrades_kb(upgrades, info["user_role"], info["alliance_coins"]),
+                parse_mode="HTML",
+            )
+        else:
+            await callback.message.edit_text(msg, parse_mode="HTML")
+    else:
+        await callback.answer(msg, show_alert=True)
+
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# Buy AllianceCoins — FSM
+# ---------------------------------------------------------------------------
+
+
+@router.callback_query(lambda c: c.data == "alliance_buy_coins")
+async def cb_alliance_buy_coins(
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+) -> None:
+    """Start FSM: ask how many AllianceCoins to buy."""
+    info = await get_alliance_info(session, callback.from_user.id)
+    if info is None:
+        await callback.answer("❌ Ты не в альянсе.", show_alert=True)
+        return
+
+    if info["user_role"] not in (AllianceRole.LEADER, AllianceRole.OFFICER):
+        await callback.answer("❌ Только лидер или офицер могут покупать 🔷.", show_alert=True)
+        return
+
+    await state.set_state(AllianceBuyCoinsStates.waiting_for_amount)
+    await callback.message.edit_text(
+        "💎 <b>Покупка 🔷 AllianceCoins</b>\n\n"
+        "Курс: <b>1 💎 PremiumCoin = 1 🔷 AllianceCoin</b>\n\n"
+        "Введи количество 🔷, которое хочешь купить:\n\n"
+        "Или нажми «Назад» для отмены.",
+        reply_markup=back_button("alliance_upgrades"),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(AllianceBuyCoinsStates.waiting_for_amount)
+async def msg_buy_coins_amount(
+    message: Message, state: FSMContext, session: AsyncSession
+) -> None:
+    """Process the entered amount and execute the purchase."""
+    raw = (message.text or "").strip()
+    await state.clear()
+
+    try:
+        amount = int(raw)
+    except ValueError:
+        await message.answer(
+            "❌ Введи целое число. Попробуй ещё раз.",
+            reply_markup=back_button("alliance_upgrades"),
+        )
+        return
+
+    success, msg = await buy_alliance_coins(session, message.from_user.id, amount)
+
+    info = await get_alliance_info(session, message.from_user.id)
+    if info and info["user_role"] in (AllianceRole.LEADER, AllianceRole.OFFICER):
+        upgrades = await get_alliance_upgrades(session, info["id"])
+        await message.answer(
+            msg + "\n\n" + _fmt_upgrades_text(info, upgrades),
+            reply_markup=alliance_upgrades_kb(upgrades, info["user_role"], info["alliance_coins"]),
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer(msg, parse_mode="HTML")

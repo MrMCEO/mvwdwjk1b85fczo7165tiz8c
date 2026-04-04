@@ -1,12 +1,11 @@
 """
 Unit tests for bot/services/alliance.py
 """
-import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.models.user import User
 from bot.services.alliance import (
-    ALLIANCE_CREATE_COST,
-    DEFENSE_BONUS_PER_MEMBER,
     create_alliance,
     get_alliance_defense_bonus,
     invite_player,
@@ -14,8 +13,6 @@ from bot.services.alliance import (
     leave_alliance,
 )
 from bot.services.player import create_player
-from sqlalchemy import select
-from bot.models.user import User
 
 
 async def _give_coins(session: AsyncSession, tg_id: int, amount: int) -> None:
@@ -137,14 +134,14 @@ async def test_leave_alliance_leader_dissolves(session: AsyncSession):
 
 
 async def test_defense_bonus_single_member(session: AsyncSession):
-    """Defense bonus is DEFENSE_BONUS_PER_MEMBER * member_count."""
+    """Defense bonus is shield_level * effect_per_level (0 when freshly created)."""
     await create_player(session, tg_id=6070, username="leader70")
     await _give_coins(session, 6070, 1000)
     await create_alliance(session, leader_id=6070, name="India Squad", tag="INDI")
 
     bonus = await get_alliance_defense_bonus(session, user_id=6070)
-    # 1 member (leader) → 0.02 * 1 = 0.02
-    assert abs(bonus - DEFENSE_BONUS_PER_MEMBER) < 1e-9
+    # New alliance has shield_level=0 → bonus = 0.0
+    assert bonus == 0.0
 
 
 async def test_defense_bonus_no_alliance(session: AsyncSession):

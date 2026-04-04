@@ -30,6 +30,7 @@ from bot.models.infection import Infection
 from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
+from bot.services.premium import format_username
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,14 @@ BASE_CURE_CHANCE: float = 0.05
 
 def _now_utc() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _fmt_user(user: User) -> str:
+    """Return a display name for a User, including premium prefix if active."""
+    now = _now_utc()
+    is_active = user.premium_until is not None and user.premium_until > now
+    base = f"@{user.username}" if user.username else str(user.tg_id)
+    return format_username(base, user.premium_prefix, is_active)
 
 
 # ---------------------------------------------------------------------------
@@ -133,14 +142,14 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                     "user_id": attacker.tg_id,
                     "message": (
                         f"Пассивный доход: +{attacker_gain} 🧫 BioCoins "
-                        f"от заражения игрока {victim.username or str(victim.tg_id)}."
+                        f"от заражения игрока {_fmt_user(victim)}."
                     ),
                 })
 
             notifications.append({
                 "user_id": victim.tg_id,
                 "message": (
-                    f"Вирус продолжает наносить урон: -{drain} 🧫 BioCoins. "
+                    f"Вирус от {_fmt_user(attacker)} наносит урон: -{drain} 🧫 BioCoins. "
                     f"Баланс: {victim.bio_coins} 🧫 BioCoins."
                 ),
             })
@@ -175,7 +184,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
             notifications.append({
                 "user_id": attacker.tg_id,
                 "message": (
-                    f"Игрок {victim.username or str(victim.tg_id)} "
+                    f"Игрок {_fmt_user(victim)} "
                     f"вылечился от твоего вируса (заражение #{inf.id})."
                 ),
             })

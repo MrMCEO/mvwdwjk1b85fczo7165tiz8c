@@ -39,9 +39,21 @@ class Alliance(Base):
         BigInteger, ForeignKey("users.tg_id"), nullable=False
     )
     description: Mapped[str] = mapped_column(String(256), default="", server_default="")
+    # max_members is now derived: 20 + capacity_level * 5
+    # The field is kept for legacy compatibility but superseded by get_alliance_max_members()
     max_members: Mapped[int] = mapped_column(Integer, default=20, server_default="20")
     defense_bonus: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # Alliance upgrade currency
+    alliance_coins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    # Upgrade levels
+    shield_level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    morale_level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    capacity_level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    mining_level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    regen_level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     members: Mapped[list[AllianceMember]] = relationship(
         back_populates="alliance", cascade="all, delete-orphan"

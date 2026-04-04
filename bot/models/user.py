@@ -35,6 +35,9 @@ class User(Base):
     premium_until: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, default=None
     )
+    premium_prefix: Mapped[str | None] = mapped_column(
+        String(10), nullable=True, default=None
+    )  # До 5 символов (String(10) — запас на multi-byte)
 
     # Relationships
     virus: Mapped["Virus"] = relationship(

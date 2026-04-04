@@ -11,13 +11,14 @@ from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.rating import rating_menu_kb, rating_type_kb
-from bot.utils.emoji import render_virus_name
+from bot.services.premium import format_username
 from bot.services.rating import (
     get_top_immunity_level,
     get_top_infections,
     get_top_richest,
     get_top_virus_level,
 )
+from bot.utils.emoji import render_virus_name
 
 router = Router(name="rating")
 
@@ -29,12 +30,19 @@ def _place(n: int) -> str:
     return _MEDALS.get(n, f"{n}.")
 
 
-def _premium_badge(premium_until: datetime | None) -> str:
-    """Return ' ⭐' if the subscription is currently active, else ''."""
+def _is_premium_active(premium_until: datetime | None) -> bool:
+    """Return True if the subscription is currently active."""
     if premium_until is None:
-        return ""
+        return False
     now = datetime.now(UTC).replace(tzinfo=None)
-    return " ⭐" if premium_until > now else ""
+    return premium_until > now
+
+
+def _fmt_row_username(row: dict) -> str:
+    """Build a display name for a rating row using prefix if available."""
+    base = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
+    active = _is_premium_active(row.get("premium_until"))
+    return format_username(base, row.get("premium_prefix"), active)
 
 
 # ---------------------------------------------------------------------------
@@ -66,9 +74,8 @@ async def cb_rating_infections(callback: CallbackQuery, session: AsyncSession) -
     else:
         lines = ["🦠 <b>Топ по активным заражениям</b>\n"]
         for i, row in enumerate(rows, start=1):
-            username = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
-            badge = _premium_badge(row.get("premium_until"))
-            lines.append(f"{_place(i)} {username}{badge} — <b>{row['count']}</b> заражений")
+            display = _fmt_row_username(row)
+            lines.append(f"{_place(i)} {display} — <b>{row['count']}</b> заражений")
         text = "\n".join(lines)
 
     await callback.message.edit_text(
@@ -88,14 +95,13 @@ async def cb_rating_virus(callback: CallbackQuery, session: AsyncSession) -> Non
     else:
         lines = ["⚔️ <b>Топ по уровню вируса</b>\n"]
         for i, row in enumerate(rows, start=1):
-            username = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
-            badge = _premium_badge(row.get("premium_until"))
+            display = _fmt_row_username(row)
             virus_name = render_virus_name(
                 row["virus_name"] or "Безымянный вирус",
                 row.get("virus_name_entities"),
             )
             lines.append(
-                f"{_place(i)} {username}{badge} — <b>ур. {row['level']}</b>"
+                f"{_place(i)} {display} — <b>ур. {row['level']}</b>"
                 f" (<i>{virus_name}</i>)"
             )
         text = "\n".join(lines)
@@ -117,9 +123,8 @@ async def cb_rating_immunity(callback: CallbackQuery, session: AsyncSession) -> 
     else:
         lines = ["🛡 <b>Топ по уровню иммунитета</b>\n"]
         for i, row in enumerate(rows, start=1):
-            username = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
-            badge = _premium_badge(row.get("premium_until"))
-            lines.append(f"{_place(i)} {username}{badge} — <b>ур. {row['level']}</b>")
+            display = _fmt_row_username(row)
+            lines.append(f"{_place(i)} {display} — <b>ур. {row['level']}</b>")
         text = "\n".join(lines)
 
     await callback.message.edit_text(
@@ -139,9 +144,8 @@ async def cb_rating_richest(callback: CallbackQuery, session: AsyncSession) -> N
     else:
         lines = ["💰 <b>Топ богатейших игроков</b>\n"]
         for i, row in enumerate(rows, start=1):
-            username = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
-            badge = _premium_badge(row.get("premium_until"))
-            lines.append(f"{_place(i)} {username}{badge} — <b>{row['bio_coins']:,}</b> 🧫")
+            display = _fmt_row_username(row)
+            lines.append(f"{_place(i)} {display} — <b>{row['bio_coins']:,}</b> 🧫")
         text = "\n".join(lines)
 
     await callback.message.edit_text(

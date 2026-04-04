@@ -11,6 +11,7 @@ All perk values are defined here — never hardcode them in other services.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from html import escape as _html_escape
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -191,3 +192,89 @@ async def get_daily_multiplier(session: AsyncSession, user_id: int) -> float:
     if await is_premium(session, user_id):
         return 1.0 + float(PREMIUM_PERKS["daily_bonus"])
     return 1.0
+
+
+# ---------------------------------------------------------------------------
+# Premium prefix
+# ---------------------------------------------------------------------------
+
+PREFIX_MAX_CHARS = 5
+
+
+async def set_prefix(session: AsyncSession, user_id: int, prefix: str) -> tuple[bool, str]:
+    """
+    Установить кастомный префикс для премиум-пользователя.
+
+    Правила:
+      - Только для активных премиум-подписчиков.
+      - Длина: не более PREFIX_MAX_CHARS видимых символов.
+      - Применяется html.escape() для безопасности.
+
+    Возвращает (success, message).
+    """
+    result = await session.execute(
+        select(User).where(User.tg_id == user_id).with_for_update()
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        return False, "Пользователь не найден."
+
+    now = _now_utc()
+    if user.premium_until is None or user.premium_until <= now:
+        return False, "❌ Кастомный префикс доступен только для премиум-подписчиков."
+
+    stripped = prefix.strip()
+    if len(stripped) > PREFIX_MAX_CHARS:
+        return False, (
+            f"❌ Префикс слишком длинный. Максимум {PREFIX_MAX_CHARS} символов, "
+            f"у тебя {len(stripped)}."
+        )
+    if not stripped:
+        return False, "❌ Префикс не может быть пустым."
+
+    safe = _html_escape(stripped)
+    user.premium_prefix = safe
+    await session.flush()
+    return True, f"✅ Префикс установлен: [{safe}]"
+
+
+async def clear_prefix(session: AsyncSession, user_id: int) -> tuple[bool, str]:
+    """Сбросить премиум-префикс (вернуть к дефолтному ⭐)."""
+    result = await session.execute(
+        select(User).where(User.tg_id == user_id).with_for_update()
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        return False, "Пользователь не найден."
+
+    user.premium_prefix = None
+    await session.flush()
+    return True, "✅ Префикс сброшен. Теперь отображается дефолтный ⭐."
+
+
+async def get_prefix(session: AsyncSession, user_id: int) -> str:
+    """Вернуть сохранённый префикс пользователя или пустую строку."""
+    user = await _get_user(session, user_id)
+    if user is None or user.premium_prefix is None:
+        return ""
+    return user.premium_prefix
+
+
+def format_username(
+    username: str,
+    prefix: str | None,
+    is_premium_active: bool = False,
+) -> str:
+    """
+    Отформатировать имя игрока с учётом премиум-префикса.
+
+    Логика:
+      - Есть prefix и премиум активен → '[PREFIX] @username'
+      - Нет prefix, но премиум активен → '@username ⭐'
+      - Нет премиума → '@username'
+    """
+    if prefix and is_premium_active:
+        return f"[{prefix}] {username}"
+    if is_premium_active:
+        return f"{username} ⭐"
+    return username

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import html
+import json
 
 from aiogram import Router
 from aiogram.fsm.context import FSMContext
@@ -14,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.virus import virus_menu_kb
 from bot.models.virus import Virus
+from bot.services.premium import get_virus_name_limit
 from bot.services.upgrade import get_virus_stats, upgrade_virus_branch
+from bot.utils.emoji import render_virus_name
 from bot.utils.throttle import check_throttle
 
 router = Router(name="virus")
@@ -44,9 +46,10 @@ def _fmt_virus_stats(data: dict) -> str:
     v = data["virus"]
     upgrades = data["upgrades"]
 
+    display_name = render_virus_name(v["name"], v.get("name_entities_json"))
     lines = [
         "🦠 <b>Мой вирус</b>\n",
-        f"Название: <b>{v['name']}</b>  |  Уровень: <b>{v['level']}</b>",
+        f"Название: <b>{display_name}</b>  |  Уровень: <b>{v['level']}</b>",
         f"Сила атаки: <b>{v['attack_power']}</b>  |  "
         f"Заразность: <b>{v['spread_rate']:.2f}</b>",
         f"Очки мутации: <b>{v['mutation_points']}</b>",
@@ -111,12 +114,15 @@ async def cb_upgrade_virus(callback: CallbackQuery, session: AsyncSession) -> No
 
 
 @router.callback_query(lambda c: c.data == "rename_virus")
-async def cb_rename_virus(callback: CallbackQuery, state: FSMContext) -> None:
+async def cb_rename_virus(
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+) -> None:
     """Begin FSM flow to rename the player's virus."""
+    name_limit = await get_virus_name_limit(session, callback.from_user.id)
     await state.set_state(VirusStates.waiting_for_name)
     await callback.message.edit_text(
-        "✏️ <b>Переименование вируса</b>\n\n"
-        "Введи новое название вируса (максимум 20 символов):",
+        f"✏️ <b>Переименование вируса</b>\n\n"
+        f"Введи новое название вируса (максимум {name_limit} символов):",
         reply_markup=_rename_cancel_kb(),
         parse_mode="HTML",
     )
@@ -130,6 +136,8 @@ async def msg_virus_name(
     """Handle the new virus name input."""
     raw = (message.text or "").strip()
 
+    name_limit = await get_virus_name_limit(session, message.from_user.id)
+
     if not raw:
         await message.answer(
             "❌ Имя не может быть пустым. Введи название вируса:",
@@ -137,14 +145,39 @@ async def msg_virus_name(
         )
         return
 
-    if len(raw) > 20:
+    if len(raw) > name_limit:
         await message.answer(
-            "❌ Максимум 20 символов. Попробуй снова:",
+            f"❌ Максимум {name_limit} символов. Попробуй снова:",
             reply_markup=_rename_cancel_kb(),
         )
         return
 
-    safe_name = html.escape(raw)
+    # Извлечь custom_emoji entities
+    entities_data = []
+    if message.entities:
+        for ent in message.entities:
+            if ent.type == "custom_emoji" and ent.custom_emoji_id:
+                entities_data.append({
+                    "offset": ent.offset,
+                    "length": ent.length,
+                    "custom_emoji_id": ent.custom_emoji_id,
+                })
+
+    # Кастомные эмодзи требуют Telegram Premium
+    if entities_data:
+        user = message.from_user
+        is_premium = bool(getattr(user, "is_premium", False))
+        if not is_premium:
+            await message.answer(
+                "⭐ Кастомные эмодзи доступны только с <b>Премиум-подпиской</b> Telegram.\n\n"
+                "Введи обычное имя (обычные эмодзи разрешены):",
+                reply_markup=_rename_cancel_kb(),
+                parse_mode="HTML",
+            )
+            return
+
+    # Сохраняем RAW имя без html.escape — экранирование выполняется в render_virus_name.
+    # Это гарантирует, что entity offsets (из Telegram) совпадают с позициями символов.
 
     # Persist the new name
     result = await session.execute(
@@ -156,7 +189,8 @@ async def msg_virus_name(
         await message.answer("❌ Вирус не найден.")
         return
 
-    virus.name = safe_name
+    virus.name = raw
+    virus.name_entities_json = json.dumps(entities_data) if entities_data else None
     await session.flush()
 
     await state.clear()
@@ -165,8 +199,9 @@ async def msg_virus_name(
     data = await get_virus_stats(session, message.from_user.id)
     menu_text = _fmt_virus_stats(data)
     upgrades = data.get("upgrades")
+    display_name = render_virus_name(raw, virus.name_entities_json)
     await message.answer(
-        f"✅ Вирус назван: <b>{safe_name}</b>\n\n" + menu_text,
+        f"✅ Вирус назван: <b>{display_name}</b>\n\n" + menu_text,
         reply_markup=virus_menu_kb(upgrades),
         parse_mode="HTML",
     )

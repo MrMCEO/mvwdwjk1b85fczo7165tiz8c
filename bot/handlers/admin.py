@@ -20,6 +20,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -581,7 +582,6 @@ async def cb_admin_stats(callback: CallbackQuery, session: AsyncSession) -> None
         return
 
     text = await _get_stats(session)
-    from aiogram.utils.keyboard import InlineKeyboardBuilder
     builder = InlineKeyboardBuilder()
     builder.button(text="🔙 Назад", callback_data="admin_menu")
     await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")

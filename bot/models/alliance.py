@@ -43,10 +43,10 @@ class Alliance(Base):
     defense_bonus: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    members: Mapped[list["AllianceMember"]] = relationship(
+    members: Mapped[list[AllianceMember]] = relationship(
         back_populates="alliance", cascade="all, delete-orphan"
     )
-    leader: Mapped["User"] = relationship("User", foreign_keys=[leader_id])
+    leader: Mapped[User] = relationship("User", foreign_keys=[leader_id])
 
     def __repr__(self) -> str:
         return f"<Alliance id={self.id} name={self.name!r} tag={self.tag!r}>"
@@ -67,8 +67,8 @@ class AllianceMember(Base):
     )
     joined_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    alliance: Mapped["Alliance"] = relationship(back_populates="members")
-    user: Mapped["User"] = relationship("User")
+    alliance: Mapped[Alliance] = relationship(back_populates="members")
+    user: Mapped[User] = relationship("User")
 
     def __repr__(self) -> str:
         return (

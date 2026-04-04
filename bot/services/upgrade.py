@@ -351,6 +351,7 @@ async def get_virus_stats(session: AsyncSession, user_id: int) -> dict:
         "virus": {
             "id": virus.id,
             "name": virus.name,
+            "name_entities_json": virus.name_entities_json,
             "level": virus.level,
             "attack_power": virus.attack_power,
             "spread_rate": virus.spread_rate,

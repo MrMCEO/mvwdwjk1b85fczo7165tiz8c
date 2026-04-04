@@ -11,17 +11,23 @@ from aiogram import F, Router
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.config import get_settings
+from bot.handlers.alliance import _fmt_alliance_info
 from bot.handlers.immunity import _fmt_immunity_stats
 from bot.handlers.info import GUIDE_URL
+from bot.handlers.premium import _fmt_premium_menu
 from bot.handlers.profile import _fmt_profile
 from bot.handlers.resources import _fmt_resources
 from bot.handlers.virus import _fmt_virus_stats
+from bot.keyboards.admin import admin_menu_kb
 from bot.keyboards.alliance import alliance_info_kb, alliance_no_clan_kb
 from bot.keyboards.attack import attack_menu_kb
+from bot.keyboards.events import EVENT_EMOJI, events_menu_kb
 from bot.keyboards.immunity import immunity_menu_kb
 from bot.keyboards.laboratory import lab_menu_kb
 from bot.keyboards.main import main_menu_kb
 from bot.keyboards.market import market_menu_kb
+from bot.keyboards.premium import premium_menu_kb
 from bot.keyboards.profile import profile_kb
 from bot.keyboards.rating import rating_menu_kb
 from bot.keyboards.resources import resources_menu_kb
@@ -29,8 +35,10 @@ from bot.keyboards.shop import shop_menu_kb
 from bot.keyboards.virus import virus_menu_kb
 from bot.services.alliance import get_alliance_info
 from bot.services.donation import EXCHANGE_RATE
+from bot.services.event import get_active_events
 from bot.services.laboratory import get_inventory
 from bot.services.player import get_or_create_player, get_player_profile
+from bot.services.premium import get_premium_info
 from bot.services.resource import get_balance
 from bot.services.upgrade import get_immunity_stats, get_virus_stats
 
@@ -67,6 +75,8 @@ _LAB_TRIGGERS = {"лаборатория", "лаба", "крафт", "инвен
 _MARKET_TRIGGERS = {"рынок", "чёрный рынок", "маркет", "торговля", "🏴‍☠️ чёрный рынок"}
 
 _ADMIN_TRIGGERS = {"админ", "admin", "⚙️ admin", "⚙️ админ"}
+
+_PREMIUM_TRIGGERS = {"премиум", "подписка", "⭐ премиум"}
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +240,6 @@ async def text_alliance(message: Message, session: AsyncSession) -> None:
             parse_mode="HTML",
         )
     else:
-        from bot.handlers.alliance import _fmt_alliance_info
         text = _fmt_alliance_info(info)
         await message.answer(
             text,
@@ -247,10 +256,6 @@ async def text_alliance(message: Message, session: AsyncSession) -> None:
 @router.message(F.text.lower().in_(_EVENTS_TRIGGERS))
 async def text_events(message: Message, session: AsyncSession) -> None:
     """Текстовая команда: показать список активных ивентов."""
-    from bot.keyboards.events import events_menu_kb, EVENT_EMOJI
-    from bot.models.event import EventType
-    from bot.services.event import get_active_events
-
     events = await get_active_events(session)
 
     if not events:
@@ -307,6 +312,19 @@ async def text_market(message: Message) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Премиум
+# ---------------------------------------------------------------------------
+
+
+@router.message(F.text.lower().in_(_PREMIUM_TRIGGERS))
+async def text_premium(message: Message, session: AsyncSession) -> None:
+    """Текстовая команда: открыть меню премиум-подписки."""
+    info = await get_premium_info(session, message.from_user.id)
+    text = _fmt_premium_menu(info)
+    await message.answer(text, reply_markup=premium_menu_kb(info["is_active"]), parse_mode="HTML")
+
+
+# ---------------------------------------------------------------------------
 # Админ-панель
 # ---------------------------------------------------------------------------
 
@@ -314,9 +332,6 @@ async def text_market(message: Message) -> None:
 @router.message(F.text.lower().in_(_ADMIN_TRIGGERS))
 async def text_admin(message: Message) -> None:
     """Текстовая команда: открыть админ-панель (только для администраторов)."""
-    from bot.config import get_settings
-    from bot.keyboards.admin import admin_menu_kb
-
     if message.from_user.id not in get_settings().admin_ids:
         await message.answer("⛔ Доступ запрещён. Эта команда только для администраторов.")
         return

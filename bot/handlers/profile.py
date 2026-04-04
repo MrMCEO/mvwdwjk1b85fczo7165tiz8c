@@ -4,6 +4,8 @@ Profile handlers — player profile view, attack log, and transaction log.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from aiogram import Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.profile import log_pagination_kb, profile_kb
 from bot.services.activity import get_attack_log, get_transaction_log
 from bot.services.player import get_player_profile
+from bot.utils.emoji import render_virus_name
+
+
+def _is_premium_active(premium_until: datetime | None) -> bool:
+    """Return True if premium_until is in the future (naive UTC comparison)."""
+    if premium_until is None:
+        return False
+    now = datetime.now(UTC).replace(tzinfo=None)
+    return premium_until > now
 
 router = Router(name="profile")
 
@@ -32,9 +43,11 @@ def _fmt_profile(data: dict) -> str:
     v = data.get("virus") or {}
     im = data.get("immunity") or {}
 
+    premium_active = _is_premium_active(u.get("premium_until"))
+    premium_badge = " ⭐" if premium_active else ""
     username_display = f"@{u['username']}" if u.get("username") else f"id{u['tg_id']}"
 
-    virus_name = v.get("name", "—")
+    virus_name = render_virus_name(v.get("name", "—"), v.get("name_entities_json"))
     virus_level = v.get("level", "—")
     immunity_level = im.get("level", "—")
 
@@ -42,7 +55,7 @@ def _fmt_profile(data: dict) -> str:
     received = data.get("infections_received_count", 0)
 
     lines = [
-        f"📊 <b>Профиль игрока {username_display}</b>\n",
+        f"📊 <b>Профиль игрока {username_display}{premium_badge}</b>\n",
         f"🦠 Вирус: <b>{virus_name}</b> (ур. <b>{virus_level}</b>)",
         f"🛡 Иммунитет: ур. <b>{immunity_level}</b>",
         f"💰 Баланс: <b>{u['bio_coins']:,}</b> 🧫",
@@ -50,6 +63,10 @@ def _fmt_profile(data: dict) -> str:
 
     if u.get("premium_coins", 0) > 0:
         lines.append(f"💎 PremiumCoins: <b>{u['premium_coins']:,}</b>")
+
+    if premium_active:
+        until_str = u["premium_until"].strftime("%d.%m.%Y")
+        lines.append(f"⭐ Премиум до: <b>{until_str}</b>")
 
     lines.append("")
     lines.append(f"⚔️ Активных атак исходящих: <b>{sent}</b>")

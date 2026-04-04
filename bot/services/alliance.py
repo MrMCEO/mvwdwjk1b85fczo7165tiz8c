@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from bot.models.alliance import Alliance, AllianceMember, AllianceRole, ROLE_LABELS
+from bot.models.alliance import ROLE_LABELS, Alliance, AllianceMember, AllianceRole
 from bot.models.user import User
 
 # ---------------------------------------------------------------------------

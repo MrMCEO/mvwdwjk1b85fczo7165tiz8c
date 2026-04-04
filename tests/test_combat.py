@@ -11,12 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.models.infection import Infection
 from bot.models.user import User
 from bot.services.combat import (
-    ATTACK_COOLDOWN,
     attack_player,
     get_active_infections_by,
     get_active_infections_on,
     try_cure,
 )
+
+# Default attack cooldown for regular (non-premium) users is 30 minutes.
+# We use this constant locally instead of importing the removed ATTACK_COOLDOWN.
+_ATTACK_COOLDOWN = timedelta(minutes=30)
 from bot.services.player import create_player
 
 
@@ -91,7 +94,7 @@ async def test_attack_already_infected(session: AsyncSession):
     infection = Infection(
         attacker_id=4030,
         victim_id=4031,
-        started_at=now_utc - ATTACK_COOLDOWN - timedelta(minutes=1),
+        started_at=now_utc - _ATTACK_COOLDOWN - timedelta(minutes=1),
         damage_per_tick=5.0,
         is_active=True,
     )

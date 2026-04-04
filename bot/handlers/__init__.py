@@ -8,6 +8,7 @@ from bot.handlers.laboratory import router as laboratory_router
 from bot.handlers.market import router as market_router
 from bot.handlers.menu import router as menu_router
 from bot.handlers.mutations import router as mutations_router
+from bot.handlers.premium import router as premium_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.rating import router as rating_router
 from bot.handlers.resources import router as resources_router
@@ -25,6 +26,7 @@ __all__ = [
     "resources_router",
     "attack_router",
     "shop_router",
+    "premium_router",
     "profile_router",
     "rating_router",
     "info_router",

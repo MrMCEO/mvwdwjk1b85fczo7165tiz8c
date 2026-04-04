@@ -18,6 +18,7 @@ from bot.handlers.laboratory import router as laboratory_router
 from bot.handlers.market import router as market_router
 from bot.handlers.menu import router as menu_router
 from bot.handlers.mutations import router as mutations_router
+from bot.handlers.premium import router as premium_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.rating import router as rating_router
 from bot.handlers.resources import router as resources_router
@@ -75,6 +76,7 @@ async def main() -> None:
     dp.include_router(profile_router)
     dp.include_router(rating_router)
     dp.include_router(mutations_router)
+    dp.include_router(premium_router)
     dp.include_router(alliance_router)
     dp.include_router(events_router)
     dp.include_router(laboratory_router)

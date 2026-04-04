@@ -27,12 +27,12 @@ from bot.models.resource import (
     TransactionReason,
 )
 from bot.models.user import User
+from bot.services.premium import get_daily_multiplier, get_mining_cooldown, get_mining_multiplier
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-MINING_COOLDOWN = timedelta(hours=1)
 DAILY_COOLDOWN = timedelta(hours=24)
 
 MINING_MIN = 15   # balanced: ~32 avg/hr, 1st upgrade (~80 coins) in ~2.5hrs
@@ -113,16 +113,18 @@ async def mine_resources(
         return 0, "Пользователь не найден."
 
     # --- Cooldown check via last MINING transaction ---
+    mining_cooldown = await get_mining_cooldown(session, user_id)
     last_tx = await _last_transaction(session, user_id, TransactionReason.MINING)
     if last_tx is not None:
-        seconds = _seconds_left(last_tx.created_at, MINING_COOLDOWN)
+        seconds = _seconds_left(last_tx.created_at, mining_cooldown)
         if seconds > 0:
             return 0, (
                 f"Добыча уже идёт. Следующая добыча через {_fmt_cooldown(seconds)}."
             )
 
     # --- Mine ---
-    amount = random.randint(MINING_MIN, MINING_MAX)
+    multiplier = await get_mining_multiplier(session, user_id)
+    amount = int(random.randint(MINING_MIN, MINING_MAX) * multiplier)
     user.bio_coins += amount
 
     tx = ResourceTransaction(
@@ -185,8 +187,9 @@ async def claim_daily_bonus(
             new_streak = 1
 
     new_streak = min(new_streak, DAILY_STREAK_MAX)
-    multiplier = 1.0 + DAILY_STREAK_BONUS * (new_streak - 1)
-    amount = int(DAILY_BASE * multiplier)
+    streak_multiplier = 1.0 + DAILY_STREAK_BONUS * (new_streak - 1)
+    premium_multiplier = await get_daily_multiplier(session, user_id)
+    amount = int(DAILY_BASE * streak_multiplier * premium_multiplier)
 
     user.bio_coins += amount
 
@@ -200,7 +203,7 @@ async def claim_daily_bonus(
     await session.flush()
 
     streak_msg = (
-        f" (стрик: {new_streak} дн., +{int((multiplier - 1) * 100)}%)"
+        f" (стрик: {new_streak} дн., +{int((streak_multiplier - 1) * 100)}%)"
         if new_streak > 1
         else ""
     )

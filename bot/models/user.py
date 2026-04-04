@@ -32,6 +32,9 @@ class User(Base):
     last_active: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), server_default=func.now(), onupdate=func.now()
     )
+    premium_until: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, default=None
+    )
 
     # Relationships
     virus: Mapped["Virus"] = relationship(

@@ -11,6 +11,7 @@ from sqlalchemy import and_, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from bot.models.alliance import Alliance, AllianceMember
 from bot.models.immunity import Immunity
 from bot.models.infection import Infection
 from bot.models.resource import Currency as CurrencyType
@@ -87,7 +88,6 @@ async def lookup_player(session: AsyncSession, identifier: str) -> dict | None:
     # Alliance info
     alliance_info: str = "Нет"
     try:
-        from bot.models.alliance import Alliance, AllianceMember
         member_res = await session.execute(
             select(AllianceMember, Alliance)
             .join(Alliance, Alliance.id == AllianceMember.alliance_id)

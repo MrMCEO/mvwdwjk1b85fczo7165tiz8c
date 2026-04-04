@@ -1,7 +1,7 @@
 import enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bot.models.base import Base
@@ -24,6 +24,7 @@ class Virus(Base):
         BigInteger, ForeignKey("users.tg_id", ondelete="CASCADE"), unique=True, index=True
     )
     name: Mapped[str] = mapped_column(String(64), default="Неизвестный вирус", server_default="Неизвестный вирус")
+    name_entities_json: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     level: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     attack_power: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
     spread_rate: Mapped[float] = mapped_column(Float, default=1.0, server_default="1.0")  # balanced: was 0.1, see combat.py formula

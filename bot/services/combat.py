@@ -28,15 +28,7 @@ from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-ATTACK_COOLDOWN = timedelta(minutes=30)
-
-MAX_ATTEMPTS_PER_TARGET_HOUR = 3
-MAX_SUCCESSFUL_INFECTIONS_HOUR = 5
+from bot.services.premium import get_attack_cooldown, get_attack_limits
 
 # Base damage per tick before lethality adjustments
 BASE_DAMAGE_PER_TICK: float = 5.0
@@ -127,7 +119,10 @@ async def attack_player(
     if attacker_id == victim_id:
         return False, "Нельзя атаковать самого себя."
 
-    # --- Rate limit: max 3 attempts on the same target per hour ---
+    # --- Resolve premium-aware limits for the attacker ---
+    max_attempts, max_infections = await get_attack_limits(session, attacker_id)
+
+    # --- Rate limit: attempts on the same target per hour ---
     one_hour_ago = _now_utc() - timedelta(hours=1)
     attempts_on_target = await session.execute(
         select(func.count()).select_from(AttackAttempt).where(
@@ -137,13 +132,13 @@ async def attack_player(
         )
     )
     count = attempts_on_target.scalar_one()
-    if count >= MAX_ATTEMPTS_PER_TARGET_HOUR:
+    if count >= max_attempts:
         return False, (
-            "Вы уже атаковали этого игрока 3 раза за последний час. "
+            f"Вы уже атаковали этого игрока {max_attempts} раз за последний час. "
             "Попробуйте позже."
         )
 
-    # --- Rate limit: max 5 successful infections per hour (all targets) ---
+    # --- Rate limit: successful infections per hour (all targets) ---
     successful_infections = await session.execute(
         select(func.count()).select_from(AttackAttempt).where(
             AttackAttempt.attacker_id == attacker_id,
@@ -152,9 +147,9 @@ async def attack_player(
         )
     )
     success_count = successful_infections.scalar_one()
-    if success_count >= MAX_SUCCESSFUL_INFECTIONS_HOUR:
+    if success_count >= max_infections:
         return False, (
-            "Вы достигли лимита заражений (5 в час). Попробуйте позже."
+            f"Вы достигли лимита заражений ({max_infections} в час). Попробуйте позже."
         )
 
     # --- Check both players exist ---
@@ -168,6 +163,7 @@ async def attack_player(
         return False, "Жертва не найдена."
 
     # --- Cooldown: look at last infection this attacker has sent (any victim) ---
+    attack_cooldown = await get_attack_cooldown(session, attacker_id)
     last_attack_result = await session.execute(
         select(Infection)
         .where(Infection.attacker_id == attacker_id)
@@ -178,8 +174,8 @@ async def attack_player(
     if last_attack is not None:
         now = _now_utc()
         elapsed = now - last_attack.started_at
-        if elapsed < ATTACK_COOLDOWN:
-            remaining = ATTACK_COOLDOWN - elapsed
+        if elapsed < attack_cooldown:
+            remaining = attack_cooldown - elapsed
             minutes = int(remaining.total_seconds() // 60)
             seconds = int(remaining.total_seconds() % 60)
             return False, (

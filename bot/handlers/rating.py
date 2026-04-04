@@ -4,6 +4,8 @@ Rating handlers — leaderboards for infections, virus level, immunity level, bi
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from aiogram import Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +26,14 @@ _MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 def _place(n: int) -> str:
     return _MEDALS.get(n, f"{n}.")
+
+
+def _premium_badge(premium_until: datetime | None) -> str:
+    """Return ' ⭐' if the subscription is currently active, else ''."""
+    if premium_until is None:
+        return ""
+    now = datetime.now(UTC).replace(tzinfo=None)
+    return " ⭐" if premium_until > now else ""
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +66,8 @@ async def cb_rating_infections(callback: CallbackQuery, session: AsyncSession) -
         lines = ["🦠 <b>Топ по активным заражениям</b>\n"]
         for i, row in enumerate(rows, start=1):
             username = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
-            lines.append(f"{_place(i)} {username} — <b>{row['count']}</b> заражений")
+            badge = _premium_badge(row.get("premium_until"))
+            lines.append(f"{_place(i)} {username}{badge} — <b>{row['count']}</b> заражений")
         text = "\n".join(lines)
 
     await callback.message.edit_text(
@@ -77,9 +88,10 @@ async def cb_rating_virus(callback: CallbackQuery, session: AsyncSession) -> Non
         lines = ["⚔️ <b>Топ по уровню вируса</b>\n"]
         for i, row in enumerate(rows, start=1):
             username = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
+            badge = _premium_badge(row.get("premium_until"))
             virus_name = row["virus_name"] or "Безымянный вирус"
             lines.append(
-                f"{_place(i)} {username} — <b>ур. {row['level']}</b>"
+                f"{_place(i)} {username}{badge} — <b>ур. {row['level']}</b>"
                 f" (<i>{virus_name}</i>)"
             )
         text = "\n".join(lines)
@@ -102,7 +114,8 @@ async def cb_rating_immunity(callback: CallbackQuery, session: AsyncSession) -> 
         lines = ["🛡 <b>Топ по уровню иммунитета</b>\n"]
         for i, row in enumerate(rows, start=1):
             username = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
-            lines.append(f"{_place(i)} {username} — <b>ур. {row['level']}</b>")
+            badge = _premium_badge(row.get("premium_until"))
+            lines.append(f"{_place(i)} {username}{badge} — <b>ур. {row['level']}</b>")
         text = "\n".join(lines)
 
     await callback.message.edit_text(
@@ -123,7 +136,8 @@ async def cb_rating_richest(callback: CallbackQuery, session: AsyncSession) -> N
         lines = ["💰 <b>Топ богатейших игроков</b>\n"]
         for i, row in enumerate(rows, start=1):
             username = f"@{row['username']}" if row["username"] else f"id{row['user_id']}"
-            lines.append(f"{_place(i)} {username} — <b>{row['bio_coins']:,}</b> 🧫")
+            badge = _premium_badge(row.get("premium_until"))
+            lines.append(f"{_place(i)} {username}{badge} — <b>{row['bio_coins']:,}</b> 🧫")
         text = "\n".join(lines)
 
     await callback.message.edit_text(

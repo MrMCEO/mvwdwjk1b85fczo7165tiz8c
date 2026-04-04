@@ -27,7 +27,7 @@ from bot.keyboards.alliance import (
     alliance_search_kb,
 )
 from bot.keyboards.common import back_button, confirm_cancel_kb
-from bot.models.alliance import Alliance, AllianceMember, AllianceRole, ROLE_LABELS
+from bot.models.alliance import ROLE_LABELS, Alliance, AllianceMember, AllianceRole
 from bot.services.alliance import (
     ALLIANCE_CREATE_COST,
     create_alliance,
@@ -349,8 +349,8 @@ async def cb_alliance_kick_list(
 
     members = await get_alliance_members(session, info["id"])
     text = (
-        f"🚫 <b>Исключить участника</b>\n\n"
-        f"Нажми «🚫 Кик» напротив игрока:"
+        "🚫 <b>Исключить участника</b>\n\n"
+        "Нажми «🚫 Кик» напротив игрока:"
     )
     await callback.message.edit_text(
         text,

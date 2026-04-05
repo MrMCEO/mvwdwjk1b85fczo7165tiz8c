@@ -1,5 +1,6 @@
 """Admin panel keyboards."""
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -65,7 +66,7 @@ def admin_promo_detail_kb(code: str, is_active: bool) -> InlineKeyboardMarkup:
     """Per-promo action keyboard."""
     builder = InlineKeyboardBuilder()
     if is_active:
-        builder.button(text="🗑 Деактивировать", callback_data=f"admin_promo_del_{code}")
+        builder.button(text="🗑 Деактивировать", callback_data=f"admin_promo_del_{code}", style=ButtonStyle.DANGER)
     builder.button(text="🔙 Промокоды", callback_data="admin_promos")
     builder.adjust(1)
     return builder.as_markup()
@@ -77,7 +78,7 @@ def admin_player_kb(user_id: int) -> InlineKeyboardMarkup:
     builder.button(text="📋 Логи прокачки",     callback_data=f"admin_logs_{user_id}_upgrades")
     builder.button(text="⚔️ Логи атак",         callback_data=f"admin_logs_{user_id}_attacks")
     builder.button(text="💰 Логи транзакций",   callback_data=f"admin_logs_{user_id}_purchases")
-    builder.button(text="💵 Выдать валюту",      callback_data=f"admin_give_{user_id}")
+    builder.button(text="💵 Выдать валюту",      callback_data=f"admin_give_{user_id}",   style=ButtonStyle.SUCCESS)
     builder.button(text="⚙️ Установить баланс",  callback_data=f"admin_setbal_{user_id}")
     builder.button(text="◀️ Назад",              callback_data="admin_find_player")
     builder.adjust(3, 2, 1)
@@ -107,7 +108,7 @@ def admin_logs_kb(user_id: int, log_type: str) -> InlineKeyboardMarkup:
 def cancel_kb() -> InlineKeyboardMarkup:
     """Single cancel button for FSM flows."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="❌ Отмена", callback_data="admin_cancel")
+    builder.button(text="❌ Отмена", callback_data="admin_cancel", style=ButtonStyle.DANGER)
     builder.adjust(1)
     return builder.as_markup()
 
@@ -118,8 +119,9 @@ def confirm_give_kb(user_id: int, bio: int, premium: int) -> InlineKeyboardMarku
     builder.button(
         text="✅ Да",
         callback_data=f"admin_give_confirm_{user_id}_{bio}_{premium}",
+        style=ButtonStyle.SUCCESS,
     )
-    builder.button(text="❌ Нет", callback_data="admin_cancel")
+    builder.button(text="❌ Нет", callback_data="admin_cancel", style=ButtonStyle.DANGER)
     builder.adjust(2)
     return builder.as_markup()
 
@@ -132,7 +134,7 @@ def confirm_give_kb(user_id: int, bio: int, premium: int) -> InlineKeyboardMarku
 def admin_events_kb(active_events: list) -> InlineKeyboardMarkup:
     """Events management menu: create button, list of active events, back."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="➕ Создать ивент", callback_data="admin_event_types")
+    builder.button(text="➕ Создать ивент", callback_data="admin_event_types", style=ButtonStyle.SUCCESS)
     for event in active_events:
         emoji = EVENT_EMOJI.get(event.event_type, "🌍")
         builder.button(
@@ -195,6 +197,7 @@ def admin_event_detail_kb(event_id: int) -> InlineKeyboardMarkup:
     builder.button(
         text="🛑 Остановить",
         callback_data=f"admin_evt_stop_ask:{event_id}",
+        style=ButtonStyle.DANGER,
     )
     builder.button(text="◀️ Назад", callback_data="admin_events")
     builder.adjust(1)
@@ -207,6 +210,7 @@ def admin_event_stop_confirm_kb(event_id: int) -> InlineKeyboardMarkup:
     builder.button(
         text="✅ Да, остановить",
         callback_data=f"admin_evt_stop:{event_id}",
+        style=ButtonStyle.DANGER,
     )
     builder.button(
         text="❌ Отмена",

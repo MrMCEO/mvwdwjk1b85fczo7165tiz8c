@@ -68,29 +68,35 @@ def _fmt_profile(data: dict) -> str:
     sent = data.get("infections_sent_count", 0)
     received = data.get("infections_received_count", 0)
 
-    lines = [
-        f"📊 <b>Профиль игрока {username_display}</b>\n",
-        f"🦠 Вирус: <b>{virus_name}</b> (ур. <b>{virus_level}</b>)",
-        f"🛡 Иммунитет: ур. <b>{immunity_level}</b>",
-        f"💰 Баланс: <b>{u['bio_coins']:,}</b> 🧫",
-    ]
-
-    if u.get("premium_coins", 0) > 0:
-        lines.append(f"💎 PremiumCoins: <b>{u['premium_coins']:,}</b>")
-
-    # Статус и префикс
+    # Статус
     from bot.services.premium import STATUS_CONFIG, UserStatus, _parse_status
     status = _parse_status(u.get("status"))
     cfg = STATUS_CONFIG.get(status, {})
-    status_name = f"{cfg.get('emoji', '')} {cfg.get('name', 'Бесплатный')}".strip()
+    status_emoji = cfg.get("emoji", "")
+    status_name_text = cfg.get("name", "Бесплатный")
 
     if status in (UserStatus.BIO_LEGEND, UserStatus.OWNER):
-        lines.append(f"🏅 Статус: <b>{status_name}</b> (навсегда)")
+        status_line = f"🏅 Статус: <b>{status_emoji} {status_name_text}</b> (навсегда)"
     elif premium_active and u.get("premium_until"):
         until_str = u["premium_until"].strftime("%d.%m.%Y")
-        lines.append(f"🏅 Статус: <b>{status_name}</b> (до {until_str})")
+        status_line = f"🏅 Статус: <b>{status_emoji} {status_name_text}</b> (до {until_str})"
     else:
-        lines.append(f"🏅 Статус: <b>{status_name}</b>")
+        status_line = f"🏅 Статус: <b>{status_emoji} {status_name_text}</b>"
+
+    lines = [
+        "📊 <b>Профиль</b>\n",
+        f"👤 {username_display}",
+        status_line,
+        "",
+        f"🦠 Вирус: <b>{virus_name}</b> (ур. <b>{virus_level}</b>)",
+        f"🛡 Иммунитет: ур. <b>{immunity_level}</b>",
+        "",
+        f"⚔️ Заражений: <b>{sent}</b> исходящих  │  <b>{received}</b> входящих",
+        f"💰 <b>{u['bio_coins']:,}</b> 🧫 BioCoins",
+    ]
+
+    if u.get("premium_coins", 0) > 0:
+        lines.append(f"💎 <b>{u['premium_coins']:,}</b> PremiumCoins")
 
     prefix = u.get("premium_prefix")
     if prefix:
@@ -99,10 +105,6 @@ def _fmt_profile(data: dict) -> str:
     display_name = u.get("display_name")
     if display_name:
         lines.append(f"✏️ Имя: <b>{display_name}</b>")
-
-    lines.append("")
-    lines.append(f"⚔️ Активных атак исходящих: <b>{sent}</b>")
-    lines.append(f"🎯 Активных атак входящих: <b>{received}</b>")
 
     return "\n".join(lines)
 

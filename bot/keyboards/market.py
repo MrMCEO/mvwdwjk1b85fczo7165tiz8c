@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -86,7 +87,7 @@ def market_contracts_kb(contracts: list[dict], page: int = 0) -> InlineKeyboardM
         builder.button(text="След. ▶️", callback_data=f"market_contracts_pg_{page + 1}")
         nav_buttons += 1
 
-    builder.button(text="➕ Создать контракт", callback_data="market_create_contract")
+    builder.button(text="➕ Создать контракт", callback_data="market_create_contract", style=ButtonStyle.SUCCESS)
     builder.button(text="◀️ Назад",            callback_data="market_menu")
 
     row_sizes = [1] * len(page_items)
@@ -106,12 +107,12 @@ def market_listing_detail_kb(listing: dict, is_owner: bool) -> InlineKeyboardMar
     lid = listing["id"]
 
     if is_owner:
-        builder.button(text="❌ Снять с продажи", callback_data=f"market_cancel_{lid}")
+        builder.button(text="❌ Снять с продажи", callback_data=f"market_cancel_{lid}", style=ButtonStyle.DANGER)
     else:
         if ltype in (ListingType.SELL_ITEM, ListingType.SELL_MUTATION):
-            builder.button(text="💸 Купить", callback_data=f"market_buy_{lid}")
+            builder.button(text="💸 Купить", callback_data=f"market_buy_{lid}", style=ButtonStyle.SUCCESS)
         elif ltype == ListingType.HIT_CONTRACT:
-            builder.button(text="🔫 Взять контракт", callback_data=f"market_claim_{lid}")
+            builder.button(text="🔫 Взять контракт", callback_data=f"market_claim_{lid}", style=ButtonStyle.SUCCESS)
 
     builder.button(text="◀️ Назад", callback_data="market_menu")
     builder.adjust(1)
@@ -142,7 +143,7 @@ def market_my_kb(listings: list[dict]) -> InlineKeyboardMarkup:
 
         label = f"{status_icon} #{item['id']} {desc}"
         if item["status"] == ListingStatus.ACTIVE:
-            builder.button(text=label, callback_data=f"market_cancel_{item['id']}")
+            builder.button(text=label, callback_data=f"market_cancel_{item['id']}", style=ButtonStyle.DANGER)
         else:
             builder.button(text=label, callback_data="market_my_noop")
 

@@ -1,5 +1,6 @@
 """Premium / status system keyboards."""
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -63,8 +64,9 @@ def status_confirm_kb(target: UserStatus) -> InlineKeyboardMarkup:
     builder.button(
         text=f"✅ Купить {cfg['emoji']} {cfg['name']} за {cfg['price']} 💎",
         callback_data=f"status_confirm:{target.value}",
+        style=ButtonStyle.SUCCESS,
     )
-    builder.button(text="❌ Отмена", callback_data="premium_menu")
+    builder.button(text="❌ Отмена", callback_data="premium_menu", style=ButtonStyle.DANGER)
     builder.adjust(1)
     return builder.as_markup()
 

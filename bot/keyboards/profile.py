@@ -1,5 +1,6 @@
 """Keyboards for the profile section."""
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -7,12 +8,14 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 def profile_kb() -> InlineKeyboardMarkup:
     """Profile view — links to activity logs, display name, and back button."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="📋 Лог атак", callback_data="attack_log:0")
-    builder.button(text="💰 Лог транзакций", callback_data="transaction_log:0")
-    builder.button(text="✏️ Изменить имя", callback_data="set_display_name")
-    builder.button(text="🔄 Сбросить имя", callback_data="clear_display_name")
-    builder.button(text="◀️ Назад", callback_data="main_menu")
-    builder.adjust(2, 2, 1)
+    # Row 1: attack logs — PRIMARY
+    builder.button(text="📝 Логи атак", callback_data="attack_log:0", style=ButtonStyle.PRIMARY)
+    # Row 2: transactions + rename — 2 in a row; transactions PRIMARY
+    builder.button(text="📋 Транзакции", callback_data="transaction_log:0", style=ButtonStyle.PRIMARY)
+    builder.button(text="✏️ Имя", callback_data="set_display_name")
+    # Row 3: back — mono
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
+    builder.adjust(1, 2, 1)
     return builder.as_markup()
 
 
@@ -41,6 +44,8 @@ def log_pagination_kb(
 
     builder.row(
         InlineKeyboardButton(text="📊 Профиль", callback_data="profile"),
-        InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu"),
     )
     return builder.as_markup()

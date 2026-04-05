@@ -48,12 +48,12 @@ def _fmt_virus_stats(data: dict) -> str:
     upgrades = data["upgrades"]
 
     display_name = render_virus_name(v["name"], v.get("name_entities_json"))
+    total_level = v["level"]
+
     lines = [
         "🦠 <b>Мой вирус</b>\n",
-        f"Название: <b>{display_name}</b>  |  Уровень: <b>{v['level']}</b>",
-        f"Сила атаки: <b>{v['attack_power']}</b>  |  "
-        f"Заразность: <b>{v['spread_rate']:.2f}</b>",
-        f"Очки мутации: <b>{v['mutation_points']}</b>",
+        f"Имя: <b>{display_name}</b>",
+        f"Уровень: <b>{total_level}</b>",
         "",
         "<b>Ветки прокачки:</b>",
     ]
@@ -62,11 +62,9 @@ def _fmt_virus_stats(data: dict) -> str:
     for branch_key, info in upgrades.items():
         icon = icons.get(branch_key, "•")
         next_cost = info.get("next_cost")
-        cost_text = "МАКС" if next_cost is None else f"→ след. уровень <b>{next_cost}</b> 🧫"
+        cost_text = "МАКС" if next_cost is None else f"{next_cost} 🧫"
         lines.append(
-            f"  {icon} {info['name']}: ур. <b>{info['level']}</b>  "
-            f"(эффект {info['effect_value']:.2f})  "
-            f"{cost_text}"
+            f"{icon} {info['name']}: ур. <b>{info['level']}</b>  │  {cost_text}"
         )
 
     return "\n".join(lines)

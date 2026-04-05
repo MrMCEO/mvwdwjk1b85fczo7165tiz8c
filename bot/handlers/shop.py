@@ -23,18 +23,18 @@ class ShopConvertStates(StatesGroup):
 
 def _build_shop_text(bio: int, premium: int) -> str:
     lines = [
-        "💎 <b>Магазин PremiumCoins</b>\n",
-        "Курс: 1 💎 = 1₽\n",
-        "Пакеты:",
+        "💎 <b>Магазин</b>\n",
+        f"Баланс: <b>{premium:,} 💎</b>  │  <b>{bio:,} 🧫</b>\n",
+        "Курс: 1 💎 = 1₽  │  Конвертация: 1 💎 = "
+        f"{EXCHANGE_RATE} 🧫\n",
+        "<b>Пакеты:</b>",
     ]
     for pkg in PACKAGES:
-        bonus_str = f" (бонус +{int(pkg['bonus'] * 100)}%)" if pkg["bonus"] else ""
-        lines.append(f"📦 {pkg['amount']} 💎 — {pkg['price_rub']}₽{bonus_str}")
+        bonus_str = f" (+{int(pkg['bonus'] * 100)}% бонус)" if pkg["bonus"] else ""
+        lines.append(f"  💎 {pkg['amount']} — {pkg['price_rub']}₽{bonus_str}")
     lines += [
-        f"\n💱 Конвертация: 1 💎 = {EXCHANGE_RATE} 🧫",
-        "\n"
-        f"Твой баланс: <b>{premium:,} 💎</b> | <b>{bio:,} 🧫</b>\n",
-        "Для покупки 💎 свяжитесь с администратором\n"
+        "",
+        "Для покупки 💎 обратитесь к администратору\n"
         "или используйте промокод: /promo КОД",
     ]
     return "\n".join(lines)

@@ -1,5 +1,6 @@
 """Referral program keyboards."""
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -8,7 +9,7 @@ def referral_menu_kb(has_claimable: bool) -> InlineKeyboardMarkup:
     """Main referral menu keyboard."""
     builder = InlineKeyboardBuilder()
     if has_claimable:
-        builder.button(text="🎁 Забрать награду", callback_data="referral_claim_menu")
+        builder.button(text="🎁 Забрать награду", callback_data="referral_claim_menu", style=ButtonStyle.SUCCESS)
     builder.button(text="📋 Мои рефералы", callback_data="referral_list")
     builder.button(text="◀️ Назад", callback_data="main_menu")
     builder.adjust(1)
@@ -22,6 +23,7 @@ def referral_claim_kb(claimable_levels: list[int]) -> InlineKeyboardMarkup:
         builder.button(
             text=f"🎁 Забрать ур. {level}",
             callback_data=f"referral_claim:{level}",
+            style=ButtonStyle.SUCCESS,
         )
     builder.button(text="◀️ Назад", callback_data="referral_menu")
     builder.adjust(1)

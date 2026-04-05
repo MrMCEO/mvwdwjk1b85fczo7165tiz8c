@@ -45,8 +45,8 @@ async def cb_attack_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text(
         "⚔️ <b>Атака</b>\n\n"
-        "Заражай других игроков своим вирусом!\n"
-        "Каждая атака имеет кулдаун 30 минут.",
+        "Выбери цель для заражения.\n"
+        "Введи @username или используй быструю атаку.",
         reply_markup=attack_menu_kb(),
         parse_mode="HTML",
     )
@@ -65,8 +65,7 @@ async def cb_attack_enter(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_text(
         "⚔️ <b>Введи @username цели</b>\n\n"
         "Напиши username игрока которого хочешь атаковать\n"
-        "(можно без символа @).\n\n"
-        "Или нажми «Назад» для отмены:",
+        "(можно без символа @).",
         reply_markup=back_button("attack_menu"),
         parse_mode="HTML",
     )
@@ -114,11 +113,15 @@ async def msg_attack_username(
     await state.clear()
 
     target_display = f"@{target.username}" if target.username else f"id{target.tg_id}"
+    virus_level = target.virus.level if target.virus else 0
+    immunity_level = target.immunity.level if target.immunity else 0
     await smart_reply(
         message,
         f"⚔️ <b>Подтверждение атаки</b>\n\n"
-        f"Цель: <b>{target_display}</b>\n\n"
-        "Атаковать этого игрока?",
+        f"Цель: <b>{target_display}</b>\n"
+        f"🦠 Вирус цели: ур. <b>{virus_level}</b>\n"
+        f"🛡 Иммунитет цели: ур. <b>{immunity_level}</b>\n\n"
+        "Атаковать?",
         reply_markup=attack_confirm_kb(target.tg_id),
     )
 
@@ -159,11 +162,11 @@ async def cb_random_attack(
     target_display = f"@{escape(target.username)}" if target.username else f"id{target.tg_id}"
 
     await callback.message.edit_text(
-        f"🎲 <b>Случайная атака</b>\n\n"
+        f"⚔️ <b>Подтверждение атаки</b>\n\n"
         f"Цель: <b>{target_display}</b>\n"
-        f"Уровень вируса: <b>{virus_level}</b>\n"
-        f"Уровень иммунитета: <b>{immunity_level}</b>\n\n"
-        "Атаковать этого игрока?",
+        f"🦠 Вирус цели: ур. <b>{virus_level}</b>\n"
+        f"🛡 Иммунитет цели: ур. <b>{immunity_level}</b>\n\n"
+        "Атаковать?",
         reply_markup=attack_confirm_kb(target.tg_id),
         parse_mode="HTML",
     )
@@ -245,7 +248,7 @@ async def cb_my_infections(callback: CallbackQuery, session: AsyncSession) -> No
         builder.button(text=f"⚔️ Мои жертвы ({out_count})", callback_data="inf_pg_by_0")
     if in_count:
         builder.button(text=f"🤒 Кто заражает меня ({in_count})", callback_data="inf_pg_on_0")
-    builder.button(text="◀️ Назад", callback_data="attack_menu")
+    builder.button(text="🔙 Назад", callback_data="attack_menu")
     builder.adjust(1)
 
     await callback.message.edit_text(

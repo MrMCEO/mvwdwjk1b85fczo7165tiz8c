@@ -1,5 +1,6 @@
 """Attack section keyboards."""
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -9,10 +10,14 @@ _PAGE_SIZE = 5
 def attack_menu_kb() -> InlineKeyboardMarkup:
     """Attack menu: enter target username, random attack, view infections, back."""
     builder = InlineKeyboardBuilder()
+    # Enter target — mono
     builder.button(text="⚔️ Ввести цель (@username)", callback_data="attack_enter")
-    builder.button(text="🎲 Случайная атака",          callback_data="random_attack")
-    builder.button(text="🦠 Мои заражения",            callback_data="my_infections")
-    builder.button(text="◀️ Назад",                    callback_data="main_menu")
+    # Random attack — PRIMARY
+    builder.button(text="🎲 Случайная атака", callback_data="random_attack", style=ButtonStyle.PRIMARY)
+    # My infections — PRIMARY
+    builder.button(text="📋 Мои заражения", callback_data="my_infections", style=ButtonStyle.PRIMARY)
+    # Back — mono
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -20,10 +25,11 @@ def attack_menu_kb() -> InlineKeyboardMarkup:
 def attack_confirm_kb(victim_id: int) -> InlineKeyboardMarkup:
     """Confirm / cancel attack on specific victim."""
     builder = InlineKeyboardBuilder()
-    # callback_data must be ≤ 64 bytes
-    builder.button(text="⚔️ Атаковать!", callback_data=f"atk_{victim_id}")
-    builder.button(text="❌ Отмена",     callback_data="attack_menu")
-    builder.adjust(2)
+    # Attack — SUCCESS
+    builder.button(text="✅ Атаковать", callback_data=f"atk_{victim_id}", style=ButtonStyle.SUCCESS)
+    # Cancel — DANGER
+    builder.button(text="❌ Отмена", callback_data="attack_menu", style=ButtonStyle.DANGER)
+    builder.adjust(1)
     return builder.as_markup()
 
 
@@ -70,9 +76,9 @@ def infections_list_kb(
     for row in nav_builder.export():
         builder.row(*row)
 
-    # Back button
+    # Back button — mono
     builder.row(
-        InlineKeyboardButton(text="◀️ Назад", callback_data="attack_menu")
+        InlineKeyboardButton(text="🔙 Назад", callback_data="attack_menu"),
     )
 
     return builder.as_markup()

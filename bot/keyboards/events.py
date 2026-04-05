@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -70,15 +71,18 @@ def event_info_kb(event: Event, is_pandemic: bool = False) -> InlineKeyboardMark
         builder.button(
             text="💀 Атаковать босса",
             callback_data=f"pandemic_attack_{event.id}",
+            style=ButtonStyle.SUCCESS,
         )
         builder.button(
             text="🏆 Таблица лидеров",
             callback_data=f"pandemic_leaderboard_{event.id}",
+            style=ButtonStyle.PRIMARY,
         )
     else:
         builder.button(
             text="🏆 Таблица лидеров",
             callback_data=f"event_leaderboard_{event.id}",
+            style=ButtonStyle.PRIMARY,
         )
 
     builder.button(text="◀️ К ивентам", callback_data="events_menu")
@@ -96,10 +100,12 @@ def pandemic_kb(event_id: int) -> InlineKeyboardMarkup:
     builder.button(
         text="💀 Атаковать",
         callback_data=f"pandemic_attack_{event_id}",
+        style=ButtonStyle.SUCCESS,
     )
     builder.button(
         text="🏆 Таблица лидеров",
         callback_data=f"pandemic_leaderboard_{event_id}",
+        style=ButtonStyle.PRIMARY,
     )
     builder.button(
         text="◀️ К ивентам",

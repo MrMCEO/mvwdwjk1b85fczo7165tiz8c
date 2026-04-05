@@ -1,5 +1,6 @@
 """Shop section keyboard."""
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -14,10 +15,15 @@ PACKAGES = [
 def shop_menu_kb() -> InlineKeyboardMarkup:
     """Shop main menu with package purchase buttons and conversion."""
     builder = InlineKeyboardBuilder()
+    # Package pairs — 2 per row, SUCCESS style
     for pkg in PACKAGES:
-        builder.button(text=f"📦 {pkg['label']}", callback_data=f"buy_pkg_{pkg['id']}")
-    builder.button(text="💱 Конвертировать 💎 → 🧫", callback_data="shop_convert_start")
+        builder.button(text=f"💎 {pkg['label']}", callback_data=f"buy_pkg_{pkg['id']}", style=ButtonStyle.SUCCESS)
+    # Convert — PRIMARY
+    builder.button(text="💱 Конвертировать 💎 → 🧫", callback_data="shop_convert_start", style=ButtonStyle.PRIMARY)
+    # Premium — mono
     builder.button(text="⭐ Премиум подписка", callback_data="premium_menu")
-    builder.button(text="◀️ Назад", callback_data="main_menu")
-    builder.adjust(1)
+    # Back — mono
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
+    # 4 packages in pairs (2+2), then convert mono, premium mono, back mono
+    builder.adjust(2, 2, 1, 1, 1)
     return builder.as_markup()

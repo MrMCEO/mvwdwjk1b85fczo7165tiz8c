@@ -10,7 +10,7 @@ def referral_menu_kb(has_claimable: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     if has_claimable:
         builder.button(text="🎁 Забрать награду", callback_data="referral_claim_menu", style=ButtonStyle.SUCCESS)
-    builder.button(text="📋 Мои рефералы", callback_data="referral_list")
+    builder.button(text="📋 Мои рефералы", callback_data="referral_list", style=ButtonStyle.PRIMARY)
     builder.button(text="◀️ Назад", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()

@@ -36,21 +36,25 @@ def status_menu_kb(
         emoji = cfg["emoji"]
         name = cfg["name"]
         price = cfg["price"]
-        label = f"{emoji} {name} — {price} 💎/мес"
         if s == current_status:
-            label += " ✅ АКТИВЕН"
-        builder.button(text=label, callback_data=f"status_buy:{s.value}")
+            label = f"{emoji} {name} — {price} 💎/мес ✅ АКТИВЕН"
+            builder.button(text=label, callback_data=f"status_buy:{s.value}", style=ButtonStyle.SUCCESS)
+        else:
+            label = f"{emoji} {name} — {price} 💎/мес"
+            builder.button(text=label, callback_data=f"status_buy:{s.value}", style=ButtonStyle.PRIMARY)
 
     # Legend — informational, shows a popup on tap
     legend_cfg = STATUS_CONFIG[UserStatus.BIO_LEGEND]
-    legend_label = f"{legend_cfg['emoji']} {legend_cfg['name']} — только через рефералов (50+)"
     if current_status == UserStatus.BIO_LEGEND:
-        legend_label += " 👑 АКТИВЕН"
-    builder.button(text=legend_label, callback_data="status_legend_info")
+        legend_label = f"{legend_cfg['emoji']} {legend_cfg['name']} — через рефералов (50+) 👑 АКТИВЕН"
+        builder.button(text=legend_label, callback_data="status_legend_info", style=ButtonStyle.SUCCESS)
+    else:
+        legend_label = f"{legend_cfg['emoji']} {legend_cfg['name']} — через рефералов (50+)"
+        builder.button(text=legend_label, callback_data="status_legend_info")
 
     # Prefix button only for users who can set one
     if STATUS_CONFIG[current_status]["prefix_length"] > 0:
-        builder.button(text="✏️ Установить префикс", callback_data="premium_set_prefix")
+        builder.button(text="✏️ Установить префикс", callback_data="premium_set_prefix", style=ButtonStyle.PRIMARY)
 
     builder.button(text="◀️ Назад", callback_data="main_menu")
     builder.adjust(1)

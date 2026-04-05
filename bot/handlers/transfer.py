@@ -49,12 +49,15 @@ class TransferStates(StatesGroup):
 
 def _fmt_transfer_menu(daily_used: int, daily_limit: int, bio_balance: int) -> str:
     commission_pct = int(TRANSFER_COMMISSION * 100)
+    remaining = max(0, daily_limit - daily_used)
     return (
-        "💸 <b>Передача 🧫 BioCoins</b>\n\n"
-        f"Твой баланс: <b>{bio_balance} 🧫</b>\n"
-        f"Дневной лимит: <b>{daily_used}/{daily_limit} 🧫</b> (использовано/лимит)\n"
-        f"Комиссия: <b>{commission_pct}%</b>\n\n"
-        "Нажми «💸 Перевести монеты» чтобы начать перевод."
+        "💸 <b>Передача 🧫 BioCoins</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        f"💰 Баланс: <code>{bio_balance:,}</code> 🧫\n"
+        f"📊 Дневной лимит: <code>{daily_used:,}/{daily_limit:,}</code> 🧫\n"
+        f"✅ Осталось сегодня: <code>{remaining:,}</code> 🧫\n"
+        f"💱 Комиссия: <code>{commission_pct}%</code>\n\n"
+        "<i>Нажми кнопку ниже, чтобы начать перевод</i>"
     )
 
 
@@ -95,10 +98,11 @@ async def cb_transfer_start(callback: CallbackQuery, state: FSMContext) -> None:
     """Begin transfer FSM: ask for recipient username."""
     await state.set_state(TransferStates.waiting_for_username)
     await callback.message.edit_text(
-        "💸 <b>Передача 🧫 BioCoins</b>\n\n"
-        "Введите @username получателя\n"
-        "(можно без символа @):\n\n"
-        "Или нажмите «Назад» для отмены.",
+        "💸 <b>Передача 🧫 BioCoins</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        "👤 Введи <b>@username</b> получателя\n"
+        "<i>(можно без символа @)</i>\n\n"
+        "Или нажми «Назад» для отмены.",
         reply_markup=transfer_back_kb(),
         parse_mode="HTML",
     )
@@ -156,11 +160,13 @@ async def msg_transfer_username(
 
     await smart_reply(
         message,
-        f"✅ Получатель: <b>@{escape(raw)}</b>\n\n"
-        f"Твой баланс: <b>{bio_balance} 🧫</b>\n"
-        f"Доступный лимит: <b>{remaining} 🧫</b> из <b>{daily_limit}</b>\n"
-        f"Комиссия: <b>{commission_pct}%</b> (получатель получит 90% суммы)\n\n"
-        "Введи сумму перевода (целое число 🧫):\n\n"
+        f"✅ <b>Получатель выбран</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"👤 Получатель: <b>@{escape(raw)}</b>\n\n"
+        f"💰 Твой баланс: <code>{bio_balance:,}</code> 🧫\n"
+        f"📊 Доступный лимит: <code>{remaining:,}</code> 🧫 из <code>{daily_limit:,}</code>\n"
+        f"💱 Комиссия: <code>{commission_pct}%</code> <i>(получатель получит 90%)</i>\n\n"
+        "Введи сумму перевода <i>(целое число)</i>:\n\n"
         "Или нажми «Назад» для отмены.",
         reply_markup=transfer_back_kb(),
     )
@@ -240,12 +246,13 @@ async def msg_transfer_amount(
 
     await smart_reply(
         message,
-        f"💸 <b>Подтверждение перевода</b>\n\n"
-        f"Получатель: <b>@{escape(recipient_username)}</b>\n"
-        f"Отправляете: <b>{amount} 🧫</b>\n"
-        f"Комиссия (10%): <b>{commission} 🧫</b>\n"
-        f"Получит: <b>{received} 🧫</b>\n\n"
-        "Подтвердить перевод?",
+        f"💸 <b>Подтверждение перевода</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"👤 Получатель: <b>@{escape(recipient_username)}</b>\n"
+        f"📤 Отправляешь: <code>{amount:,}</code> 🧫\n"
+        f"💱 Комиссия (<code>10%</code>): <code>{commission:,}</code> 🧫\n"
+        f"📥 Получит: <code>{received:,}</code> 🧫\n\n"
+        "<i>Подтверди или отмени перевод:</i>",
         reply_markup=transfer_confirm_kb(recipient_username, amount, received, commission),
     )
 

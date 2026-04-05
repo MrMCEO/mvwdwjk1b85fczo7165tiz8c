@@ -53,18 +53,18 @@ def _fmt_status_line(info: dict) -> str:
     name = cfg["name"]
 
     if not info["is_active"]:
-        return f"Ваш статус: {name}"
+        return f"📛 Ваш статус: <b>{name}</b>"
 
     if status in (UserStatus.BIO_LEGEND, UserStatus.OWNER):
-        return f"Ваш статус: {emoji} {name} (навсегда)"
+        return f"📛 Ваш статус: {emoji} <b>{name}</b> <i>(навсегда)</i>"
 
     until = info["until"]
     until_str = until.strftime("%d.%m.%Y") if until else "∞"
-    return f"Ваш статус: {emoji} {name} (до {until_str})"
+    return f"📛 Ваш статус: {emoji} <b>{name}</b> <i>(до {until_str})</i>"
 
 
 def _fmt_status_list() -> str:
-    """Build the readable list of all statuses with prices."""
+    """Build the readable list of all statuses with prices and key perks."""
     lines: list[str] = []
     for s, cfg in STATUS_CONFIG.items():
         emoji = cfg["emoji"]
@@ -73,10 +73,20 @@ def _fmt_status_list() -> str:
         if s in (UserStatus.FREE, UserStatus.OWNER):
             continue
         if s == UserStatus.BIO_LEGEND:
-            lines.append(f"{emoji} {name} — только через рефералов (50+)")
+            lines.append(
+                f"{emoji} <b>{name}</b> — <i>только через рефералов (50+)</i>\n"
+                f"   🧫 +{int(cfg['mining_bonus']*100)}% добыча  "
+                f"🎁 +{int(cfg['daily_bonus']*100)}% ежедневка  "
+                f"🦠 {cfg['max_infections_hour']}/час"
+            )
         else:
-            lines.append(f"{emoji} {name} — {price} 💎/мес")
-    return "\n".join(lines)
+            lines.append(
+                f"{emoji} <b>{name}</b> — <code>{price}</code> 💎/мес\n"
+                f"   🧫 +{int(cfg['mining_bonus']*100)}% добыча  "
+                f"🎁 +{int(cfg['daily_bonus']*100)}% ежедневка  "
+                f"🦠 {cfg['max_infections_hour']}/час"
+            )
+    return "\n\n".join(lines)
 
 
 def _fmt_premium_menu(info: dict) -> str:
@@ -84,26 +94,33 @@ def _fmt_premium_menu(info: dict) -> str:
     status_line = _fmt_status_line(info)
     statuses_block = _fmt_status_list()
     return (
-        "📊 <b>Система статусов</b>\n\n"
+        "📊 <b>Система статусов BioWars</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
         f"{status_line}\n\n"
         "<b>Доступные статусы:</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n"
         f"{statuses_block}"
     )
 
 
 def _fmt_perks(status: UserStatus) -> str:
-    """Return a short perks description for *status*."""
+    """Return a detailed perks description for *status*."""
     cfg = STATUS_CONFIG[status]
+    prefix_line = (
+        f"✏️ Префикс до <code>{cfg['prefix_length']}</code> символов"
+        if cfg["prefix_length"]
+        else "❌ Без кастомного префикса"
+    )
     lines = [
-        f"🧫 +{int(cfg['mining_bonus'] * 100)}% к добыче ресурсов",
-        f"🎁 +{int(cfg['daily_bonus'] * 100)}% к ежедневному бонусу",
-        f"⏱ Кулдаун добычи: {cfg['mining_cooldown']} мин",
-        f"⚔️ Кулдаун атаки: {cfg['attack_cooldown']} мин",
-        f"🎯 {cfg['max_attempts_target']} попытки на цель/час",
-        f"🦠 {cfg['max_infections_hour']} заражений/час",
-        f"💸 Лимит перевода: {cfg['transfer_limit']} 🧬",
-        f"✏️ Префикс до {cfg['prefix_length']} символов" if cfg["prefix_length"] else "❌ Без префикса",
-        f"⭐ Премиум-эмодзи в вирусах: {'да' if cfg['premium_emoji'] else 'нет'}",
+        f"🧫 +<code>{int(cfg['mining_bonus'] * 100)}</code>% к добыче ресурсов",
+        f"🎁 +<code>{int(cfg['daily_bonus'] * 100)}</code>% к ежедневному бонусу",
+        f"⏱ Кулдаун добычи: <code>{cfg['mining_cooldown']}</code> мин",
+        f"⚔️ Кулдаун атаки: <code>{cfg['attack_cooldown']}</code> мин",
+        f"🎯 <code>{cfg['max_attempts_target']}</code> попытки на цель/час",
+        f"🦠 <code>{cfg['max_infections_hour']}</code> заражений/час",
+        f"💸 Лимит перевода: <code>{cfg['transfer_limit']:,}</code> 🧫",
+        prefix_line,
+        f"⭐ Премиум-эмодзи в вирусах: {'<b>да</b>' if cfg['premium_emoji'] else 'нет'}",
     ]
     return "\n".join(lines)
 
@@ -149,10 +166,13 @@ async def cb_status_buy(callback: CallbackQuery, session: AsyncSession) -> None:
     cfg = STATUS_CONFIG[target]
     perks = _fmt_perks(target)
     text = (
-        f"{cfg['emoji']} <b>Подтверждение покупки — {cfg['name']}</b>\n\n"
-        f"Стоимость: <b>{cfg['price']} 💎</b> PremiumCoins / мес\n\n"
-        f"<b>Перки:</b>\n{perks}\n\n"
-        "Подтвердить покупку?"
+        f"{cfg['emoji']} <b>Подтверждение покупки — {cfg['name']}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"💎 Стоимость: <code>{cfg['price']}</code> PremiumCoins / мес\n\n"
+        f"<b>Перки статуса:</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"{perks}\n\n"
+        "<i>Подтверди покупку или вернись назад:</i>"
     )
     await callback.message.edit_text(
         text,

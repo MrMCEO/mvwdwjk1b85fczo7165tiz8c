@@ -15,11 +15,11 @@ PAGE_SIZE = 5
 def market_menu_kb() -> InlineKeyboardMarkup:
     """Root navigation for the БиоБиржа."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="📦 Продать предмет",    callback_data="market_sell_item")
-    builder.button(text="🧬 Продать мутацию",    callback_data="market_sell_mutation")
-    builder.button(text="🎯 Контракты",          callback_data="market_contracts")
-    builder.button(text="📋 Все лоты",           callback_data="market_listings")
-    builder.button(text="📋 Мои лоты",           callback_data="market_my")
+    builder.button(text="📦 Продать предмет",    callback_data="market_sell_item",    style=ButtonStyle.SUCCESS)
+    builder.button(text="🧬 Продать мутацию",    callback_data="market_sell_mutation", style=ButtonStyle.SUCCESS)
+    builder.button(text="🎯 Контракты",          callback_data="market_contracts",     style=ButtonStyle.PRIMARY)
+    builder.button(text="📋 Все лоты",           callback_data="market_listings",      style=ButtonStyle.PRIMARY)
+    builder.button(text="🗂 Мои лоты",           callback_data="market_my",            style=ButtonStyle.PRIMARY)
     builder.button(text="◀️ Назад",              callback_data="main_menu")
     builder.adjust(2, 1, 2, 1)
     return builder.as_markup()
@@ -39,20 +39,20 @@ def market_listings_kb(listings: list[dict], page: int = 0) -> InlineKeyboardMar
     for item in page_items:
         ltype = item["listing_type"]
         if ltype == ListingType.SELL_ITEM:
-            label = f"[#{item['id']}] 📦 Предмет — {item['price']:,}🧫"
+            label = f"📦 #{item['id']} · Предмет · {item['price']:,} 🧫"
         elif ltype == ListingType.SELL_MUTATION:
-            label = f"[#{item['id']}] 🧬 Мутация — {item['price']:,}🧫"
+            label = f"🧬 #{item['id']} · Мутация · {item['price']:,} 🧫"
         else:
-            label = f"[#{item['id']}] Лот — {item['price']:,}🧫"
-        builder.button(text=label, callback_data=f"market_buy_{item['id']}")
+            label = f"📄 #{item['id']} · Лот · {item['price']:,} 🧫"
+        builder.button(text=label, callback_data=f"market_buy_{item['id']}", style=ButtonStyle.PRIMARY)
 
     # Pagination row
     nav_buttons = 0
     if page > 0:
-        builder.button(text="◀️ Пред.", callback_data=f"market_listings_pg_{page - 1}")
+        builder.button(text="◀️ Пред.", callback_data=f"market_listings_pg_{page - 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
     if start + PAGE_SIZE < len(listings):
-        builder.button(text="След. ▶️", callback_data=f"market_listings_pg_{page + 1}")
+        builder.button(text="След. ▶️", callback_data=f"market_listings_pg_{page + 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
 
     builder.button(text="◀️ Назад", callback_data="market_menu")
@@ -76,15 +76,15 @@ def market_contracts_kb(contracts: list[dict], page: int = 0) -> InlineKeyboardM
     for item in page_items:
         target = item.get("target_username") or "???"
         claimed = "🔴" if item.get("buyer_id") is None else "🟡"
-        label = f"[#{item['id']}] {claimed} @{target} — {item['reward']:,}🧫"
-        builder.button(text=label, callback_data=f"market_claim_{item['id']}")
+        label = f"🎯 #{item['id']} · {claimed} @{target} · {item['reward']:,} 🧫"
+        builder.button(text=label, callback_data=f"market_claim_{item['id']}", style=ButtonStyle.PRIMARY)
 
     nav_buttons = 0
     if page > 0:
-        builder.button(text="◀️ Пред.", callback_data=f"market_contracts_pg_{page - 1}")
+        builder.button(text="◀️ Пред.", callback_data=f"market_contracts_pg_{page - 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
     if start + PAGE_SIZE < len(contracts):
-        builder.button(text="След. ▶️", callback_data=f"market_contracts_pg_{page + 1}")
+        builder.button(text="След. ▶️", callback_data=f"market_contracts_pg_{page + 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
 
     builder.button(text="➕ Создать контракт", callback_data="market_create_contract", style=ButtonStyle.SUCCESS)
@@ -169,10 +169,10 @@ def market_inventory_items_kb(items: list[dict], page: int = 0) -> InlineKeyboar
 
     nav_buttons = 0
     if page > 0:
-        builder.button(text="◀️ Пред.", callback_data=f"market_inv_pg_{page - 1}")
+        builder.button(text="◀️ Пред.", callback_data=f"market_inv_pg_{page - 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
     if start + PAGE_SIZE < len(items):
-        builder.button(text="След. ▶️", callback_data=f"market_inv_pg_{page + 1}")
+        builder.button(text="След. ▶️", callback_data=f"market_inv_pg_{page + 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
 
     builder.button(text="◀️ Назад", callback_data="market_menu")
@@ -205,10 +205,10 @@ def market_inventory_mutations_kb(
 
     nav_buttons = 0
     if page > 0:
-        builder.button(text="◀️ Пред.", callback_data=f"market_mut_pg_{page - 1}")
+        builder.button(text="◀️ Пред.", callback_data=f"market_mut_pg_{page - 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
     if start + PAGE_SIZE < len(mutations):
-        builder.button(text="След. ▶️", callback_data=f"market_mut_pg_{page + 1}")
+        builder.button(text="След. ▶️", callback_data=f"market_mut_pg_{page + 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
 
     builder.button(text="◀️ Назад", callback_data="market_menu")

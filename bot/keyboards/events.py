@@ -51,6 +51,7 @@ def events_menu_kb(events: list[Event]) -> InlineKeyboardMarkup:
             builder.button(
                 text=f"{emoji} {event.title}",
                 callback_data=f"event_info_{event.id}",
+                style=ButtonStyle.PRIMARY,
             )
 
     builder.button(text="◀️ Назад", callback_data="main_menu")

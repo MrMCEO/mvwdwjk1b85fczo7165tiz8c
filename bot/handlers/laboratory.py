@@ -63,9 +63,14 @@ async def cb_lab_menu(callback: CallbackQuery, session: AsyncSession) -> None:
 
     text = (
         "🔬 <b>Лаборатория</b>\n\n"
-        "Здесь ты можешь крафтить предметы за 🧫 BioCoins.\n"
-        "Предметы одноразовые и хранятся в инвентаре.\n\n"
-        f"📦 Предметов в инвентаре: <b>{total_items}</b>"
+        "<i>Здесь ты создаёшь предметы за 🧫 BioCoins.</i>\n"
+        "<i>Предметы одноразовые и хранятся в инвентаре.</i>\n\n"
+        "⚗️ <b>Возможности лаборатории:</b>\n"
+        "  💊 Защитные предметы (вакцины, щиты)\n"
+        "  💣 Атакующие усилители (бомбы, яды)\n"
+        "  📦 Экономические бустеры\n"
+        "  🔭 Особые предметы (разведка, мутации)\n\n"
+        f"📦 Предметов в инвентаре: <code>{total_items}</code>"
     )
     await callback.message.edit_text(text, reply_markup=lab_menu_kb(), parse_mode="HTML")
     await callback.answer()
@@ -78,11 +83,11 @@ async def cb_lab_menu(callback: CallbackQuery, session: AsyncSession) -> None:
 
 @router.callback_query(F.data == "lab_craft")
 async def cb_lab_craft(callback: CallbackQuery) -> None:
-    lines = ["🔬 <b>Крафт предметов</b>\n"]
+    lines = ["🔬 <b>Крафт предметов</b>\n", "<i>Выбери предмет для создания:</i>\n"]
     for item_type in ItemType:
         cfg = ITEM_CONFIG[item_type]
         lines.append(
-            f"{cfg['emoji']} <b>{cfg['name']}</b> — {cfg['cost']} 🧫\n"
+            f"{cfg['emoji']} <b>{cfg['name']}</b> — <code>{cfg['cost']}</code> 🧫\n"
             f"   <i>{cfg['desc']}</i>"
         )
     text = "\n".join(lines)
@@ -115,11 +120,11 @@ async def cb_lab_craft_item(callback: CallbackQuery, session: AsyncSession) -> N
         return
 
     # Обновить экран крафта с результатом
-    lines = ["🔬 <b>Крафт предметов</b>\n"]
+    lines = ["🔬 <b>Крафт предметов</b>\n", "<i>Выбери предмет для создания:</i>\n"]
     for it in ItemType:
         cfg = ITEM_CONFIG[it]
         lines.append(
-            f"{cfg['emoji']} <b>{cfg['name']}</b> — {cfg['cost']} 🧫\n"
+            f"{cfg['emoji']} <b>{cfg['name']}</b> — <code>{cfg['cost']}</code> 🧫\n"
             f"   <i>{cfg['desc']}</i>"
         )
     lines.append(f"\n{message}")
@@ -140,8 +145,8 @@ async def cb_lab_inventory(callback: CallbackQuery, session: AsyncSession) -> No
     if not inventory:
         text = (
             "📦 <b>Инвентарь</b>\n\n"
-            "Инвентарь пуст.\n"
-            "Перейди в раздел 🔬 Крафт, чтобы создать предметы."
+            "<i>Инвентарь пуст.</i>\n\n"
+            "🔬 Перейди в раздел <b>Крафт</b>, чтобы создать предметы."
         )
         await callback.message.edit_text(
             text, reply_markup=lab_inventory_kb([]), parse_mode="HTML"
@@ -149,9 +154,10 @@ async def cb_lab_inventory(callback: CallbackQuery, session: AsyncSession) -> No
         await callback.answer()
         return
 
-    lines = ["📦 <b>Инвентарь</b>\n"]
+    total = sum(i["count"] for i in inventory)
+    lines = ["📦 <b>Инвентарь</b>", f"<i>Предметов: <code>{total}</code></i>\n"]
     for item in inventory:
-        count_txt = f" x{item['count']}" if item["count"] > 1 else ""
+        count_txt = f" ×<code>{item['count']}</code>" if item["count"] > 1 else ""
         lines.append(
             f"{item['emoji']} <b>{item['name']}</b>{count_txt}\n"
             f"   <i>{item['desc']}</i>"
@@ -249,33 +255,33 @@ async def fsm_spy_target(
     # Вирус ветки
     v_upgrades = virus.get("upgrades", {})
     v_branches = "\n".join(
-        f"   • {branch}: ур. {info['level']}"
+        f"  • {branch}: ур. <code>{info['level']}</code>"
         for branch, info in v_upgrades.items()
-    ) or "   нет данных"
+    ) or "  <i>нет данных</i>"
 
     # Иммунитет ветки
     im_upgrades = immunity.get("upgrades", {})
     im_branches = "\n".join(
-        f"   • {branch}: ур. {info['level']}"
+        f"  • {branch}: ур. <code>{info['level']}</code>"
         for branch, info in im_upgrades.items()
-    ) or "   нет данных"
+    ) or "  <i>нет данных</i>"
 
     text = (
         f"🔭 <b>Разведка: @{escape(data['username'])}</b>\n\n"
-        f"🧫 BioCoins: <b>{data['bio_coins']:,}</b>\n"
-        f"🦠 Заражений: <b>{data['active_infections']}</b> (входящих)\n\n"
+        f"🧫 BioCoins: <code>{data['bio_coins']:,}</code>\n"
+        f"🦠 Активных заражений: <code>{data['active_infections']}</code>\n\n"
         f"🦠 <b>Вирус</b>\n"
-        f"   Имя: {render_virus_name(virus.get('name', '—'), virus.get('name_entities_json'))}\n"
-        f"   Уровень: {virus.get('level', '—')}\n"
-        f"   Атака: {virus.get('attack_power', '—')}\n"
-        f"   Заразность: {virus.get('spread_rate', '—')}\n"
-        f"   Ветки прокачки:\n{v_branches}\n\n"
+        f"  Имя: {render_virus_name(virus.get('name', '—'), virus.get('name_entities_json'))}\n"
+        f"  Уровень: <code>{virus.get('level', '—')}</code>\n"
+        f"  Атака: <code>{virus.get('attack_power', '—')}</code>\n"
+        f"  Заразность: <code>{virus.get('spread_rate', '—')}</code>\n"
+        f"  Ветки прокачки:\n{v_branches}\n\n"
         f"🛡 <b>Иммунитет</b>\n"
-        f"   Уровень: {immunity.get('level', '—')}\n"
-        f"   Сопротивление: {immunity.get('resistance', '—')}\n"
-        f"   Обнаружение: {immunity.get('detection_power', '—')}\n"
-        f"   Регенерация: {immunity.get('recovery_speed', '—')}\n"
-        f"   Ветки прокачки:\n{im_branches}"
+        f"  Уровень: <code>{immunity.get('level', '—')}</code>\n"
+        f"  Сопротивление: <code>{immunity.get('resistance', '—')}</code>\n"
+        f"  Обнаружение: <code>{immunity.get('detection_power', '—')}</code>\n"
+        f"  Регенерация: <code>{immunity.get('recovery_speed', '—')}</code>\n"
+        f"  Ветки прокачки:\n{im_branches}"
     )
 
     await smart_reply(message, text, reply_markup=lab_menu_kb())

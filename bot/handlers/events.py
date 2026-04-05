@@ -33,7 +33,6 @@ from bot.keyboards.events import (
     pandemic_kb,
 )
 from bot.models.event import EventType
-from bot.utils.chat import smart_reply
 from bot.services.event import (
     DEFAULT_BOSS_HP,
     EVENT_REWARDS,
@@ -47,6 +46,7 @@ from bot.services.event import (
     start_pandemic,
     stop_event,
 )
+from bot.utils.chat import smart_reply
 
 router = Router(name="events")
 logger = logging.getLogger(__name__)
@@ -90,16 +90,21 @@ def _fmt_events_list(events: list) -> str:
     if not events:
         return (
             "🌍 <b>Ивенты</b>\n\n"
-            "Сейчас нет активных ивентов.\n\n"
-            "Возвращайся позже — администраторы регулярно запускают события!"
+            "<i>Сейчас нет активных ивентов.</i>\n\n"
+            "⏰ Возвращайся позже — администраторы регулярно запускают события!\n\n"
+            "🎁 <i>Участники ивентов получают ценные награды и призы.</i>"
         )
 
     lines = ["🌍 <b>Активные ивенты</b>\n"]
     for event in events:
         emoji = EVENT_EMOJI.get(event.event_type, "🌍")
+        type_label = EVENT_TYPE_LABELS.get(event.event_type, "")
         remaining = _fmt_time_remaining(event.ends_at)
-        lines.append(f"{emoji} <b>{escape(event.title)}</b> — <i>осталось {remaining}</i>")
-    lines.append("\nНажми на ивент для подробностей.")
+        lines.append(
+            f"{emoji} <b>{escape(event.title)}</b>\n"
+            f"   <i>{type_label} · осталось {remaining}</i>"
+        )
+    lines.append("\n<i>Нажми на ивент для подробностей и участия.</i>")
     return "\n".join(lines)
 
 
@@ -119,7 +124,7 @@ def _fmt_event_detail(event, leaderboard: list[dict] | None = None, is_pandemic:
 
     lines = [
         f"{emoji} <b>{escape(event.title)}</b>",
-        f"Тип: <b>{type_label}</b>",
+        f"<i>{type_label}</i>",
         "",
     ]
     if description:
@@ -127,9 +132,10 @@ def _fmt_event_detail(event, leaderboard: list[dict] | None = None, is_pandemic:
         lines.append("")
 
     lines += [
-        f"🕐 Начало: {started} UTC",
-        f"🕐 Конец:  {ends} UTC",
-        f"⏳ Осталось: <b>{remaining}</b>",
+        "🗓 <b>Время проведения</b>",
+        f"  🕐 Начало: <code>{started} UTC</code>",
+        f"  🕐 Конец:  <code>{ends} UTC</code>",
+        f"  ⏳ Осталось: <b>{remaining}</b>",
     ]
 
     # Top-5 leaderboard preview
@@ -143,20 +149,20 @@ def _fmt_event_detail(event, leaderboard: list[dict] | None = None, is_pandemic:
             username = escape(entry["username"])
             score_label = "урона" if is_pandemic else "очков"
             score = entry.get("damage", entry.get("score", 0))
-            lines.append(f"{medal} @{username} — {score:,} {score_label}")
+            lines.append(f"  {medal} @{username} — <code>{score:,}</code> {score_label}")
 
     # Prize preview
     reward_table = PANDEMIC_REWARDS if is_pandemic else EVENT_REWARDS
     lines.append("")
-    lines.append("🎁 <b>Призы:</b>")
+    lines.append("🎁 <b>Призы победителям:</b>")
     medals = {1: "🥇", 2: "🥈", 3: "🥉"}
     for r in reward_table:
         place = r["place"]
         medal = medals.get(place, f"{place}.")
-        parts = [f"{r['bio']} 🧫"]
+        parts = [f"<code>{r['bio']}</code> 🧫"]
         if r["premium"] > 0:
-            parts.append(f"{r['premium']} 💎")
-        lines.append(f"{medal} {' + '.join(parts)}")
+            parts.append(f"<code>{r['premium']}</code> 💎")
+        lines.append(f"  {medal} {' + '.join(parts)}")
 
     return "\n".join(lines)
 

@@ -116,18 +116,32 @@ def _fmt_alliance_info(info: dict) -> str:
     privacy = info.get("privacy", AlliancePrivacy.REQUEST)
     privacy_label = PRIVACY_LABELS.get(privacy, "📩 По запросу")
 
-    return (
-        f"🏰 <b>[{escape(info['tag'])}] {escape(info['name'])}</b>\n\n"
-        f"👑 Лидер: <b>{info['leader_username']}</b>\n"
-        f"👥 Участников: <b>{info['member_count']}/{info['max_members']}</b>\n"
-        f"🛡 Бонус защиты: <b>+{bonus_pct}%</b>\n"
-        f"🔷 AllianceCoins: <b>{coins}</b>\n"
-        f"🧫 Казна (bio): <b>{treasury_bio}</b>\n"
-        f"{privacy_label}\n"
-        f"📅 Создан: <b>{created}</b>\n\n"
-        f"Твоя роль: <b>{role_label}</b>"
-        + (f"\n\n📝 {escape(info['description'])}" if info.get("description") else "")
-    )
+    lines = [
+        f"🏰 <b>[{escape(info['tag'])}] {escape(info['name'])}</b>",
+        "",
+    ]
+
+    if info.get("description"):
+        lines.append(f"<i>{escape(info['description'])}</i>")
+        lines.append("")
+
+    lines += [
+        "👤 <b>Участники и управление</b>",
+        f"  👑 Лидер: <code>{info['leader_username']}</code>",
+        f"  👥 Состав: <code>{info['member_count']}/{info['max_members']}</code>",
+        f"  🎖 Твоя роль: <code>{role_label}</code>",
+        "",
+        "💰 <b>Казна и ресурсы</b>",
+        f"  🔷 AllianceCoins: <code>{coins}</code>",
+        f"  🧫 Казна (bio): <code>{treasury_bio}</code>",
+        "",
+        "⚙️ <b>Параметры</b>",
+        f"  🛡 Бонус защиты: <code>+{bonus_pct}%</code>",
+        f"  {privacy_label}",
+        f"  📅 Создан: <code>{created}</code>",
+    ]
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -147,8 +161,12 @@ async def cb_alliance_menu(
     if info is None:
         await callback.message.edit_text(
             "🏰 <b>Альянсы</b>\n\n"
-            "Ты не состоишь ни в каком альянсе.\n\n"
-            "Создай свой или вступи в существующий!",
+            "<i>Ты не состоишь ни в одном альянсе.</i>\n\n"
+            "🔰 Объединяйся с другими игроками, чтобы:\n"
+            "  🛡 Получать бонусы к защите\n"
+            "  💰 Копить общую казну\n"
+            "  ⚔️ Участвовать в клановых ивентах\n\n"
+            "Создай свой альянс или вступи в существующий!",
             reply_markup=alliance_no_clan_kb(),
             parse_mode="HTML",
         )

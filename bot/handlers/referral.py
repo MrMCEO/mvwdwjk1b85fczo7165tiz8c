@@ -58,9 +58,9 @@ def _fmt_reward_line(reward: dict, active_count: int) -> str:
     is_available = reward["is_available"]
 
     # Build reward description
-    parts = [f"{bio} 🧫"]
+    parts = [f"<code>{bio}</code> 🧫"]
     if premium:
-        parts.append(f"{premium} 💎")
+        parts.append(f"<code>{premium}</code> 💎")
     if status:
         icon = _STATUS_ICONS.get(status, "⭐")
         name = _STATUS_NAMES.get(status, status)
@@ -70,19 +70,19 @@ def _fmt_reward_line(reward: dict, active_count: int) -> str:
 
     if is_claimed:
         mark = "✅"
-        suffix = "[Получено]"
+        suffix = "<i>Получено</i>"
     elif is_available:
         mark = "🟡"
-        suffix = "[Забрать!]"
+        suffix = "<b>Забрать!</b>"
     else:
         mark = "⬜"
         # Show progress only for the next unreached level
         if active_count < required:
-            suffix = f"[{active_count}/{required}]"
+            suffix = f"<i>{active_count}/{required}</i>"
         else:
             suffix = ""
 
-    return f"{mark} Ур. {level} ({required} реф) — {reward_desc} {suffix}".strip()
+    return f"{mark} <b>Ур. {level}</b> (<code>{required}</code> реф) — {reward_desc} {suffix}".strip()
 
 
 def _fmt_referral_menu(stats: dict, link: str) -> str:
@@ -93,14 +93,16 @@ def _fmt_referral_menu(stats: dict, link: str) -> str:
     reward_lines = "\n".join(_fmt_reward_line(r, active) for r in stats["rewards"])
 
     return (
-        "🤝 <b>Реферальная программа</b>\n\n"
-        "Ваша ссылка:\n"
+        "🤝 <b>Реферальная программа</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        "🔗 Твоя реферальная ссылка:\n"
         f"<code>{link}</code>\n\n"
-        "📊 <b>Статистика:</b>\n"
-        f"Всего приглашено: <b>{total}</b>\n"
-        f"Активных (7 дней): <b>{active}</b>\n"
-        f"Квалифицированных: <b>{qualified}</b>\n\n"
-        "🎁 <b>Награды:</b>\n"
+        "📊 <b>Статистика</b>\n"
+        f"👥 Всего приглашено: <code>{total}</code>\n"
+        f"✅ Активных (7 дней): <code>{active}</code>\n"
+        f"🏆 Квалифицированных: <code>{qualified}</code>\n\n"
+        "🎁 <b>Награды по уровням</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n"
         f"{reward_lines}"
     )
 
@@ -161,7 +163,9 @@ async def cb_referral_claim_menu(call: CallbackQuery, session: AsyncSession) -> 
         return
 
     await call.message.edit_text(
-        "🎁 <b>Выбери уровень награды для получения:</b>",
+        "🎁 <b>Получить награду</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        "Выбери уровень для получения награды:",
         reply_markup=referral_claim_kb(claimable),
         parse_mode="HTML",
     )
@@ -217,16 +221,18 @@ async def cb_referral_list(call: CallbackQuery, session: AsyncSession) -> None:
 
     if total == 0:
         text = (
-            "📋 <b>Мои рефералы</b>\n\n"
-            "У тебя ещё нет приглашённых игроков.\n\n"
-            "Поделись своей реферальной ссылкой!"
+            "📋 <b>Мои рефералы</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "🕳 У тебя ещё нет приглашённых игроков.\n\n"
+            "<i>Поделись своей реферальной ссылкой и получай награды!</i>"
         )
     else:
         text = (
-            "📋 <b>Мои рефералы</b>\n\n"
-            f"Всего приглашено: <b>{total}</b>\n"
-            f"Квалифицированных (≥5 прокачек): <b>{qualified}</b>\n"
-            f"Активных (последние 7 дней): <b>{active}</b>\n\n"
+            "📋 <b>Мои рефералы</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            f"👥 Всего приглашено: <code>{total}</code>\n"
+            f"🏆 Квалифицированных (≥5 прокачек): <code>{qualified}</code>\n"
+            f"✅ Активных (последние 7 дней): <code>{active}</code>\n\n"
             "<i>Реферал считается активным, если заходил в игру "
             "в течение последних 7 дней и имеет ≥5 прокачек.</i>"
         )

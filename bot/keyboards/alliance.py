@@ -13,8 +13,8 @@ from bot.services.alliance import ALLIANCE_UPGRADE_CONFIG
 def alliance_no_clan_kb() -> InlineKeyboardMarkup:
     """Keyboard shown when the player is not in any alliance."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="🏰 Создать альянс", callback_data="alliance_create")
-    builder.button(text="🔍 Найти альянс",   callback_data="alliance_search")
+    builder.button(text="🏰 Создать альянс", callback_data="alliance_create", style=ButtonStyle.PRIMARY)
+    builder.button(text="🔍 Найти альянс",   callback_data="alliance_search", style=ButtonStyle.SUCCESS)
     builder.button(text="◀️ Назад",          callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
@@ -37,14 +37,14 @@ def alliance_info_kb(role: AllianceRole, pending_requests: int = 0) -> InlineKey
     if role in (AllianceRole.LEADER, AllianceRole.OFFICER):
         builder.button(text="➕ Пригласить",       callback_data="alliance_invite",          style=ButtonStyle.SUCCESS)
         builder.button(text="🚫 Кикнуть",          callback_data="alliance_kick_list",       style=ButtonStyle.DANGER)
-        builder.button(text="🔧 Улучшения",        callback_data="alliance_upgrades")
-        builder.button(text="💱 Конвертировать казну", callback_data="alliance_convert_treasury", style=ButtonStyle.PRIMARY)
+        builder.button(text="🔧 Улучшения",        callback_data="alliance_upgrades",            style=ButtonStyle.PRIMARY)
+        builder.button(text="💱 Конвертировать казну", callback_data="alliance_convert_treasury", style=ButtonStyle.SUCCESS)
 
         req_label = (
             f"📩 Заявки ({pending_requests})" if pending_requests > 0
             else "📩 Заявки"
         )
-        builder.button(text=req_label, callback_data="alliance_requests")
+        builder.button(text=req_label, callback_data="alliance_requests",                         style=ButtonStyle.PRIMARY)
 
     if role == AllianceRole.LEADER:
         builder.button(text="⚙️ Приватность",      callback_data="alliance_privacy")
@@ -310,7 +310,7 @@ def alliance_upgrades_kb(
         builder.button(text=label, callback_data=f"alliance_upgrade_{key}")
 
     if role in (AllianceRole.LEADER, AllianceRole.OFFICER):
-        builder.button(text="💎 Купить 🔷 AllianceCoins", callback_data="alliance_buy_coins")
+        builder.button(text="💎 Купить 🔷 AllianceCoins", callback_data="alliance_buy_coins", style=ButtonStyle.SUCCESS)
 
     builder.button(text="◀️ Назад", callback_data="alliance_menu")
     builder.adjust(1)

@@ -89,26 +89,29 @@ def _fmt_listing(item: dict) -> str:
 
     if ltype == ListingType.SELL_ITEM:
         return (
-            f"<b>#{item['id']} — Продажа предмета 📦</b>\n"
-            f"Цена: <b>{item['price']:,}</b> 🧫\n"
-            f"Статус: {status}\n"
-            f"Действует до: {expires} UTC"
+            f"📦 <b>Лот #{item['id']} — Предмет</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"💰 Цена: <code>{item['price']:,}</code> 🧫\n"
+            f"📊 Статус: {status}\n"
+            f"⏳ Действует до: <i>{expires} UTC</i>"
         )
     elif ltype == ListingType.SELL_MUTATION:
         return (
-            f"<b>#{item['id']} — Продажа мутации 🧬</b>\n"
-            f"Цена: <b>{item['price']:,}</b> 🧫\n"
-            f"Статус: {status}\n"
-            f"Действует до: {expires} UTC"
+            f"🧬 <b>Лот #{item['id']} — Мутация</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"💰 Цена: <code>{item['price']:,}</code> 🧫\n"
+            f"📊 Статус: {status}\n"
+            f"⏳ Действует до: <i>{expires} UTC</i>"
         )
     else:  # HIT_CONTRACT
         claimed = "🟡 Взят исполнителем" if item.get("buyer_id") else "🔴 Свободен"
         return (
-            f"<b>#{item['id']} — Контракт на заражение</b>\n"
-            f"Цель: <b>@{escape(item.get('target_username') or '???')}</b>\n"
-            f"Награда: <b>{item['reward']:,}</b> 🧫\n"
-            f"Статус: {claimed}\n"
-            f"Действует до: {expires} UTC"
+            f"🎯 <b>Контракт #{item['id']} — На заражение</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"🎯 Цель: <b>@{escape(item.get('target_username') or '???')}</b>\n"
+            f"💰 Награда: <code>{item['reward']:,}</code> 🧫\n"
+            f"📊 Статус: {claimed}\n"
+            f"⏳ Действует до: <i>{expires} UTC</i>"
         )
 
 
@@ -122,9 +125,11 @@ async def cb_market_menu(callback: CallbackQuery, state: FSMContext) -> None:
     """Show БиоБиржа main menu."""
     await state.clear()
     await callback.message.edit_text(
-        "🔬 <b>БиоБиржа</b>\n\n"
-        "Торгуй предметами и мутациями с другими игроками\n"
-        "или размести контракт на заражение.",
+        "🔬 <b>БиоБиржа</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        "📦 Торгуй предметами и мутациями с другими игроками\n"
+        "🎯 Размещай контракты на заражение врагов\n\n"
+        "<i>Комиссия биржи: +5% от цены (сверху для покупателя)</i>",
         reply_markup=market_menu_kb(),
         parse_mode="HTML",
     )
@@ -162,8 +167,10 @@ async def _show_listings(
 
     if not trade:
         await callback.message.edit_text(
-            "🔬 <b>Все лоты</b>\n\n"
-            "Пока нет активных лотов. Будь первым!",
+            "🔬 <b>Все лоты — БиоБиржа</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "🕳 Пока нет активных лотов.\n"
+            "<i>Будь первым — выставь что-нибудь на продажу!</i>",
             reply_markup=market_listings_kb([], page=0),
             parse_mode="HTML",
         )
@@ -175,9 +182,10 @@ async def _show_listings(
     showing_end = min(showing_start + PAGE_SIZE - 1, total)
 
     await callback.message.edit_text(
-        f"🔬 <b>Все лоты — БиоБиржа</b>\n\n"
-        f"Показано {showing_start}–{showing_end} из {total}.\n"
-        "Нажми на лот, чтобы купить.",
+        f"🔬 <b>Все лоты — БиоБиржа</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"📋 Показано <code>{showing_start}–{showing_end}</code> из <code>{total}</code>\n"
+        f"<i>Нажми на лот, чтобы купить</i>",
         reply_markup=market_listings_kb(trade, page=page),
         parse_mode="HTML",
     )
@@ -212,8 +220,10 @@ async def _show_contracts(
 
     if not contracts:
         await callback.message.edit_text(
-            "🎯 <b>Контракты на заражение</b>\n\n"
-            "Пока нет активных контрактов.",
+            "🎯 <b>Контракты на заражение</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "🕳 Пока нет активных контрактов.\n"
+            "<i>Размести первый контракт и найди исполнителя!</i>",
             reply_markup=market_contracts_kb([], page=0),
             parse_mode="HTML",
         )
@@ -225,10 +235,11 @@ async def _show_contracts(
     showing_end = min(showing_start + PAGE_SIZE - 1, total)
 
     await callback.message.edit_text(
-        f"🎯 <b>Контракты на заражение</b>\n\n"
-        f"Показано {showing_start}–{showing_end} из {total}.\n"
-        "🔴 — свободен, 🟡 — взят исполнителем.\n"
-        "Нажми на контракт, чтобы взять его.",
+        f"🎯 <b>Контракты на заражение</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"📋 Показано <code>{showing_start}–{showing_end}</code> из <code>{total}</code>\n"
+        f"🔴 — свободен  🟡 — взят исполнителем\n"
+        f"<i>Нажми на контракт, чтобы взяться за него</i>",
         reply_markup=market_contracts_kb(contracts, page=page),
         parse_mode="HTML",
     )
@@ -328,7 +339,10 @@ async def cb_market_my(
 
     if not listings:
         await callback.message.edit_text(
-            "📋 <b>Мои лоты</b>\n\nУ тебя пока нет лотов.",
+            "📋 <b>Мои лоты</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "🕳 У тебя пока нет лотов.\n"
+            "<i>Продай предмет или мутацию через главное меню биржи</i>",
             reply_markup=back_button("market_menu"),
             parse_mode="HTML",
         )
@@ -336,10 +350,12 @@ async def cb_market_my(
         return
 
     active = sum(1 for item in listings if item["status"] == ListingStatus.ACTIVE)
+    total = len(listings)
     await callback.message.edit_text(
-        f"📋 <b>Мои лоты</b>\n\n"
-        f"Всего: <b>{len(listings)}</b> | Активных: <b>{active}</b>\n\n"
-        "Нажми на активный лот, чтобы снять с продажи.",
+        f"📋 <b>Мои лоты</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"📊 Всего: <code>{total}</code>  🟢 Активных: <code>{active}</code>\n\n"
+        f"<i>Нажми на 🟢 активный лот, чтобы снять с продажи</i>",
         reply_markup=market_my_kb(listings),
         parse_mode="HTML",
     )

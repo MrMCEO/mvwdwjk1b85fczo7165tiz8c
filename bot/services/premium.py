@@ -5,6 +5,7 @@ Statuses (ascending privilege order):
   FREE | BIO_PLUS | BIO_PRO | BIO_ELITE | BIO_LEGEND
 
 BIO_LEGEND is obtained through referrals (50+), not purchased.
+OWNER is a hidden developer-only status — never expose it in UI/listings.
 All perk values live in STATUS_CONFIG — never hardcode them elsewhere.
 """
 
@@ -150,6 +151,7 @@ STATUS_CONFIG: dict[UserStatus, dict] = {
         "price": 0,  # admin-assigned only, permanent
         "emoji": "🔴",
         "name": "Owner",
+        "hidden": True,  # never expose in UI/listings — developer-only status
         "mining_bonus": 0.25,
         "daily_bonus": 0.50,
         "mining_cooldown": 45,
@@ -300,6 +302,15 @@ async def buy_status(
     user = result.scalar_one_or_none()
     if user is None:
         return False, "Пользователь не найден."
+
+    # Check hierarchy — cannot buy a status lower than current
+    current = await get_user_status(session, user_id)
+    if _status_gte(current, target) and current != target:
+        current_cfg = STATUS_CONFIG[current]
+        return False, (
+            f"У тебя уже статус {current_cfg['emoji']} {current_cfg['name']}, "
+            f"который выше или равен выбранному."
+        )
 
     cfg = STATUS_CONFIG[target]
     cost: int = cfg["price"]

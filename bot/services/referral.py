@@ -8,6 +8,8 @@ Responsibilities:
   - get_active_referral_count: count qualified referrals active within INACTIVITY_DAYS.
   - get_referral_stats: full stats dict for the referral menu.
   - claim_reward: award bio/premium coins (and optionally a status) for a reward level.
+  - claim_repeatable_reward: award the infinite repeatable reward (each 10 referrals beyond
+    REPEATABLE_BASE_THRESHOLD).
   - deactivate_stale_referrals: called from the tick — marks old referrals inactive.
   - update_referral_activity: call on any user action to keep last_active fresh.
 """
@@ -49,6 +51,19 @@ QUALIFICATION_UPGRADES: int = 5
 # Qualified referrals inactive for this many days are excluded from the active count
 INACTIVITY_DAYS: int = 7
 
+# ---------------------------------------------------------------------------
+# Repeatable (infinite) reward configuration
+# ---------------------------------------------------------------------------
+
+# Threshold of referrals for the last regular level (level 7)
+REPEATABLE_BASE_THRESHOLD: int = 50
+
+# Every REPEATABLE_STEP active referrals above the base threshold earns one claim
+REPEATABLE_STEP: int = 10
+
+# Bio coins awarded per repeatable claim
+REPEATABLE_BIO: int = 1000
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -64,6 +79,22 @@ def _reward_by_level(level: int) -> dict | None:
         if r["level"] == level:
             return r
     return None
+
+
+def _available_repeatable_claims(active_count: int, already_claimed: int) -> int:
+    """
+    Calculate how many repeatable reward claims are currently available.
+
+    Formula:
+        available = (active_count - REPEATABLE_BASE_THRESHOLD) // REPEATABLE_STEP
+                    - already_claimed
+
+    Returns 0 if below base threshold.
+    """
+    if active_count <= REPEATABLE_BASE_THRESHOLD:
+        return 0
+    earned = (active_count - REPEATABLE_BASE_THRESHOLD) // REPEATABLE_STEP
+    return max(0, earned - already_claimed)
 
 
 # ---------------------------------------------------------------------------
@@ -191,14 +222,19 @@ async def get_referral_stats(session: AsyncSession, user_id: int) -> dict:
     Return full referral stats for *user_id*.
 
     Keys:
-      total_referrals   int   — total rows where referrer_id == user_id
-      qualified_count   int   — qualified referrals (regardless of activity)
-      active_count      int   — qualified + active within INACTIVITY_DAYS
-      current_level     int   — highest level whose required count is met
-      rewards           list  — list of dicts with status per reward level
+      total_referrals          int   — total rows where referrer_id == user_id
+      qualified_count          int   — qualified referrals (regardless of activity)
+      active_count             int   — qualified + active within INACTIVITY_DAYS
+      current_level            int   — highest level whose required count is met
+      rewards                  list  — list of dicts with status per reward level
         Each item: {level, required, bio, premium, status, status_days,
                     is_claimed, is_available}
         is_available = active_count >= required AND NOT is_claimed
+      repeatable_available     int   — how many repeatable claims are currently available
+      repeatable_claimed       int   — how many times repeatable reward was already claimed
+      repeatable_bio           int   — bio per repeatable claim
+      repeatable_step          int   — referrals needed per repeatable claim
+      repeatable_base          int   — base threshold (last regular level)
     """
     # Total referrals
     total_result = await session.execute(
@@ -226,6 +262,11 @@ async def get_referral_stats(session: AsyncSession, user_id: int) -> dict:
     )
     claimed_levels: set[int] = set(claimed_result.scalars().all())
 
+    # Repeatable claims already made (stored on the user row)
+    user_result = await session.execute(select(User).where(User.tg_id == user_id))
+    user = user_result.scalar_one_or_none()
+    repeatable_claimed: int = user.repeatable_referral_claims if user else 0
+
     # Determine current level (highest fully met reward)
     current_level = 0
     for reward in REFERRAL_REWARDS:
@@ -247,12 +288,19 @@ async def get_referral_stats(session: AsyncSession, user_id: int) -> dict:
             }
         )
 
+    repeatable_available = _available_repeatable_claims(active_count, repeatable_claimed)
+
     return {
         "total_referrals": total_referrals,
         "qualified_count": qualified_count,
         "active_count": active_count,
         "current_level": current_level,
         "rewards": rewards,
+        "repeatable_available": repeatable_available,
+        "repeatable_claimed": repeatable_claimed,
+        "repeatable_bio": REPEATABLE_BIO,
+        "repeatable_step": REPEATABLE_STEP,
+        "repeatable_base": REPEATABLE_BASE_THRESHOLD,
     }
 
 
@@ -349,6 +397,56 @@ async def claim_reward(
     reward_str = ", ".join(p for p in parts if p)
     logger.info("claim_reward: user=%d level=%d awarded: %s", user_id, level, reward_str)
     return True, f"🎁 Получена награда уровня {level}! {reward_str}"
+
+
+async def claim_repeatable_reward(
+    session: AsyncSession, user_id: int
+) -> tuple[bool, str]:
+    """
+    Claim one instance of the infinite repeatable reward.
+
+    Every REPEATABLE_STEP active referrals above REPEATABLE_BASE_THRESHOLD
+    earns one claim worth REPEATABLE_BIO bio coins.
+
+    Returns (success, message).
+    """
+    # Fetch user with lock to prevent concurrent double-claims
+    user_result = await session.execute(
+        select(User).where(User.tg_id == user_id).with_for_update()
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        return False, "Пользователь не найден."
+
+    active_count = await get_active_referral_count(session, user_id)
+    available = _available_repeatable_claims(active_count, user.repeatable_referral_claims)
+
+    if available <= 0:
+        needed_total = REPEATABLE_BASE_THRESHOLD + (user.repeatable_referral_claims + 1) * REPEATABLE_STEP
+        return False, (
+            f"Недостаточно активных рефералов для бесконечной награды. "
+            f"Нужно {needed_total}, у тебя {active_count}."
+        )
+
+    # Award one claim
+    user.bio_coins += REPEATABLE_BIO
+    user.repeatable_referral_claims += 1
+
+    tx = ResourceTransaction(
+        user_id=user_id,
+        amount=REPEATABLE_BIO,
+        currency=CurrencyType.BIO_COINS,
+        reason=TransactionReason.REFERRAL_REWARD,
+    )
+    session.add(tx)
+
+    await session.flush()
+
+    logger.info(
+        "claim_repeatable_reward: user=%d claim_no=%d awarded +%d bio",
+        user_id, user.repeatable_referral_claims, REPEATABLE_BIO,
+    )
+    return True, f"🔄 Бесконечная награда получена! +{REPEATABLE_BIO} 🧫 BioCoins"
 
 
 async def deactivate_stale_referrals(session: AsyncSession) -> int:

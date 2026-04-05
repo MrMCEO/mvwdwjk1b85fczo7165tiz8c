@@ -37,7 +37,8 @@ _WELCOME_NEW = (
     "🏰 Вступай в альянс и воюй кланом\n"
     "🧪 Крафти предметы в лаборатории\n"
     "📈 Торгуй на БиоБирже\n\n"
-    "<i>Нажми «Начать играть» чтобы создать персонажа!</i>"
+    "<i>Нажми «Начать играть» чтобы создать персонажа!</i>\n"
+    "<i>Для подробной информации введи</i> <code>инфо</code>"
 )
 
 _WELCOME_BACK_TPL = (
@@ -75,6 +76,7 @@ _GUIDE_TEXT = (
 # ---------------------------------------------------------------------------
 
 _CHANNEL_URL = "https://t.me/biowars_news"
+_INVITE_GROUP_URL = "https://t.me/BestBIOwarsrobot?startgroup=true"
 
 
 def _welcome_new_kb() -> InlineKeyboardMarkup:
@@ -93,6 +95,13 @@ def _welcome_new_kb() -> InlineKeyboardMarkup:
                     text="📖 Как играть?",
                     callback_data="info_guide",
                     style=ButtonStyle.PRIMARY,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="👥 Играть вместе с друзьями!",
+                    url=_INVITE_GROUP_URL,
+                    style=ButtonStyle.SUCCESS,
                 ),
             ],
             [

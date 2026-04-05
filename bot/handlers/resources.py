@@ -29,7 +29,7 @@ def _fmt_resources(balance: dict) -> str:
         f"🧫 BioCoins: <code>{bio:,}</code>\n"
         f"💎 PremiumCoins: <code>{premium:,}</code>\n\n"
         "━━━━━━━━━━━━━━━\n"
-        "<i>Добывай ресурсы каждые 30 минут или бери ежедневный бонус.</i>"
+        "<i>Добывай ресурсы каждые 60 минут или бери ежедневный бонус.</i>"
     )
 
 

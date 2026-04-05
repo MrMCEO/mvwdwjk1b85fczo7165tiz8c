@@ -5,11 +5,13 @@ from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
-def referral_menu_kb(has_claimable: bool) -> InlineKeyboardMarkup:
+def referral_menu_kb(has_claimable: bool, has_repeatable: bool = False) -> InlineKeyboardMarkup:
     """Main referral menu keyboard."""
     builder = InlineKeyboardBuilder()
     if has_claimable:
         builder.button(text="🎁 Забрать награду", callback_data="referral_claim_menu", style=ButtonStyle.SUCCESS)
+    if has_repeatable:
+        builder.button(text="🔄 Забрать бесконечную награду", callback_data="referral_claim_repeatable", style=ButtonStyle.SUCCESS)
     builder.button(text="📋 Мои рефералы", callback_data="referral_list", style=ButtonStyle.PRIMARY)
     builder.button(text="🔙 Главное меню", callback_data="main_menu")
     builder.adjust(1)

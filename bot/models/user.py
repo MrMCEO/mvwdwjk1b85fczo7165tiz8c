@@ -51,6 +51,11 @@ class User(Base):
     notify_cooldowns: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     notify_events: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
 
+    # Repeatable referral reward counter (how many times the infinite level has been claimed)
+    repeatable_referral_claims: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
+
     # Relationships
     virus: Mapped["Virus"] = relationship(
         "Virus", back_populates="owner", uselist=False, cascade="all, delete-orphan"

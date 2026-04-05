@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, func
@@ -40,7 +40,9 @@ class ResourceTransaction(Base):
     currency: Mapped[Currency] = mapped_column(Enum(Currency), nullable=False)
     reason: Mapped[TransactionReason] = mapped_column(Enum(TransactionReason), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=func.now(), server_default=func.now()
+        DateTime,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        server_default=func.now(),
     )
 
     # Relationships

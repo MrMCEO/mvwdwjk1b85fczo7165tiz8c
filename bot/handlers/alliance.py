@@ -499,6 +499,7 @@ async def cb_alliance_kick(
             await callback.message.edit_text(msg, parse_mode="HTML")
     else:
         await callback.answer(msg, show_alert=True)
+        return
 
     await callback.answer()
 
@@ -576,6 +577,7 @@ async def cb_alliance_promote(
             )
     else:
         await callback.answer(msg, show_alert=True)
+        return
 
     await callback.answer()
 
@@ -607,6 +609,7 @@ async def cb_alliance_demote(
             )
     else:
         await callback.answer(msg, show_alert=True)
+        return
 
     await callback.answer()
 
@@ -892,6 +895,7 @@ async def cb_alliance_upgrade(
             await callback.message.edit_text(msg, parse_mode="HTML")
     else:
         await callback.answer(msg, show_alert=True)
+        return
 
     await callback.answer()
 
@@ -1055,6 +1059,7 @@ async def cb_alliance_convert_treasury(
         )
     else:
         await callback.answer(msg, show_alert=True)
+        return
 
     await callback.answer()
 
@@ -1120,6 +1125,7 @@ async def cb_set_privacy(
             )
     else:
         await callback.answer(msg, show_alert=True)
+        return
 
     await callback.answer()
 
@@ -1152,6 +1158,7 @@ async def cb_alliance_request_join(
         )
     else:
         await callback.answer(msg, show_alert=True)
+        return
 
     await callback.answer()
 
@@ -1217,6 +1224,7 @@ async def cb_req_accept(
             )
     else:
         await callback.answer(msg, show_alert=True)
+        return
 
     await callback.answer()
 
@@ -1249,6 +1257,7 @@ async def cb_req_decline(
             )
     else:
         await callback.answer(msg, show_alert=True)
+        return
 
     await callback.answer()
 

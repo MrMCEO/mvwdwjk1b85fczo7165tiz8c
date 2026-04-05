@@ -1,4 +1,5 @@
 from bot.handlers.admin import router as admin_router
+from bot.handlers.moderation import router as moderation_router
 from bot.handlers.alliance import router as alliance_router
 from bot.handlers.attack import router as attack_router
 from bot.handlers.events import router as events_router
@@ -44,4 +45,5 @@ __all__ = [
     "settings_router",
     "transfer_router",
     "text_commands_router",
+    "moderation_router",
 ]

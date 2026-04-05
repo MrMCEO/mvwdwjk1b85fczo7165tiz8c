@@ -9,6 +9,7 @@ from aiogram.enums import ParseMode
 
 from bot.config import get_settings
 from bot.handlers.admin import router as admin_router
+from bot.handlers.moderation import router as moderation_router
 from bot.handlers.alliance import router as alliance_router
 from bot.handlers.attack import router as attack_router
 from bot.handlers.events import router as events_router
@@ -94,6 +95,8 @@ async def main() -> None:
     dp.include_router(transfer_router)
     # Admin router before text_commands to handle /admin, FSM states, callbacks
     dp.include_router(admin_router)
+    # Moderation commands (group-only: /ban, /mute, /unban, /unmute, /report)
+    dp.include_router(moderation_router)
     # Inline-mode handler — before text_commands to avoid interception
     dp.include_router(inline_router)
     # Text commands MUST be last — otherwise may intercept FSM input (e.g. attack username)

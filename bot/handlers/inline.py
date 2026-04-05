@@ -23,6 +23,17 @@ from bot.services.player import get_player_profile
 from bot.services.premium import STATUS_CONFIG, UserStatus, format_username
 from bot.utils.emoji import virus_name_entities
 
+
+def _utf16_len(s: str) -> int:
+    """Return the number of UTF-16 code units for string s.
+
+    Telegram entity offsets/lengths count UTF-16 code units, not Python
+    characters.  For BMP characters (U+0000–U+FFFF) this equals len(s);
+    for supplementary characters (e.g. most emoji) each Python char counts
+    as 2 UTF-16 code units.
+    """
+    return len(s.encode("utf-16-le")) // 2
+
 router = Router(name="inline")
 
 # --------------------------------------------------------------------------- #
@@ -137,15 +148,15 @@ async def inline_handler(query: InlineQuery, session: AsyncSession) -> None:
 
     # --- Entities ---------------------------------------------------------- #
     # Bold for the header line "BioWars — Карточка игрока"
-    bold_start = len("🧬 ")
+    bold_start = _utf16_len("🧬 ")
     bold_text = "BioWars — Карточка игрока"
     card_entities: list[MessageEntity] = [
-        MessageEntity(type="bold", offset=bold_start, length=len(bold_text)),
+        MessageEntity(type="bold", offset=bold_start, length=_utf16_len(bold_text)),
     ]
 
     # Custom emoji entities for the virus name (shifted to their position in
     # the full card_text).
-    virus_offset = len(header + line_name + line_status + line_virus_prefix)
+    virus_offset = _utf16_len(header + line_name + line_status + line_virus_prefix)
     card_entities.extend(
         virus_name_entities(
             virus_name_raw,

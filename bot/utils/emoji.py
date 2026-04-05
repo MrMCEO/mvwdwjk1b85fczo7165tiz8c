@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import html
 import json
+import logging
+from json import JSONDecodeError
 from typing import TYPE_CHECKING
+
+_log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from aiogram.types import MessageEntity
@@ -41,7 +45,11 @@ def virus_name_entities(
     if not entities_json:
         return []
 
-    raw_entities = json.loads(entities_json)
+    try:
+        raw_entities = json.loads(entities_json)
+    except JSONDecodeError:
+        _log.warning("virus_name_entities: invalid JSON in entities_json, returning []")
+        return []
     if not raw_entities:
         return []
 
@@ -73,7 +81,11 @@ def render_virus_name(name: str, entities_json: str | None) -> str:
     if not entities_json:
         return html.escape(name)
 
-    entities = json.loads(entities_json)
+    try:
+        entities = json.loads(entities_json)
+    except JSONDecodeError:
+        _log.warning("render_virus_name: invalid JSON in entities_json, falling back to plain name")
+        return html.escape(name)
     if not entities:
         return html.escape(name)
 

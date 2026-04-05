@@ -25,6 +25,7 @@ from bot.services.combat import (
 )
 from bot.services.notifications import should_notify
 from bot.utils.chat import smart_reply
+from bot.utils.throttle import check_throttle
 
 router = Router(name="attack")
 logger = logging.getLogger(__name__)
@@ -132,6 +133,14 @@ async def cb_random_attack(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
     """Pick a random eligible target and show the confirmation screen."""
+    remaining = check_throttle(callback.from_user.id, "random_attack", cooldown=10.0)
+    if remaining > 0:
+        await callback.answer(
+            f"⏳ Подождите {int(remaining)} сек. перед следующей случайной атакой.",
+            show_alert=True,
+        )
+        return
+
     target = await get_random_target(session, callback.from_user.id)
 
     if target is None:

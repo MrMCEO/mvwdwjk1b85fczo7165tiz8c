@@ -382,6 +382,7 @@ async def get_random_target(session: AsyncSession, attacker_id: int) -> User | N
     Excludes:
     - the attacker themselves
     - players already actively infected by this attacker
+    - players who have no immunity record (attack_player would fail for them)
     """
     # Subquery: victim_ids already infected by attacker (active infections only)
     already_infected_sq = (
@@ -395,12 +396,16 @@ async def get_random_target(session: AsyncSession, attacker_id: int) -> User | N
         .scalar_subquery()
     )
 
+    # Subquery: user_ids that have an immunity record
+    has_immunity_sq = select(Immunity.owner_id).scalar_subquery()
+
     result = await session.execute(
         select(User)
         .where(
             and_(
                 User.tg_id != attacker_id,
                 User.tg_id.not_in(already_infected_sq),
+                User.tg_id.in_(has_immunity_sq),
             )
         )
         .options(

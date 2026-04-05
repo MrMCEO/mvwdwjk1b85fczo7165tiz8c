@@ -51,17 +51,20 @@ def _remaining_text(mutation: Mutation) -> str:
 
 
 def _fmt_mutations_text(mutations: list[Mutation]) -> str:
-    lines = ["🧬 <b>Активные мутации вируса</b>\n"]
+    lines = ["🧬 <b>Активные мутации вируса</b>"]
 
     if not mutations:
-        lines.append("У тебя нет активных мутаций.")
         lines.append("")
+        lines.append("<i>У тебя нет активных мутаций.</i>")
+        lines.append("")
+        lines.append("─" * 20)
         lines.append(
-            "Мутации выпадают случайно после атак (шанс 15%).\n"
-            "Они дают временные баффы или дебаффы твоему вирусу."
+            "<i>Мутации выпадают случайно после атак (шанс 15%).\n"
+            "Они дают временные баффы или дебаффы твоему вирусу.</i>"
         )
         return "\n".join(lines)
 
+    lines.append("")
     for m in mutations:
         emoji = RARITY_EMOJI.get(m.rarity, "⚪")
         name = MUTATION_LABELS.get(m.mutation_type, m.mutation_type.value)
@@ -71,13 +74,14 @@ def _fmt_mutations_text(mutations: list[Mutation]) -> str:
         remaining = _remaining_text(m)
 
         lines.append(
-            f"{emoji} <b>{name}</b> [{rarity_label}]\n"
-            f"   {description} — осталось: <b>{remaining}</b>"
+            f"{emoji} <b>{name}</b> <i>[{rarity_label}]</i>\n"
+            f"   <i>{description}</i> — осталось: <code>{remaining}</code>"
         )
 
     lines.append("")
+    lines.append("─" * 20)
     lines.append(
-        f"Всего активных мутаций: <b>{len(mutations)}</b>"
+        f"<i>Всего активных мутаций:</i> <code>{len(mutations)}</code>"
     )
     return "\n".join(lines)
 

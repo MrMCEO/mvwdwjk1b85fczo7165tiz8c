@@ -127,8 +127,9 @@ def _fmt_player_card(data: dict) -> str:
     last_active = u["last_active"].strftime("%d.%m.%Y %H:%M") if u.get("last_active") else "—"
 
     lines = [
-        f"👤 <b>{uname}</b> (ID: <code>{u['tg_id']}</code>)",
-        f"🧫 <b>{u['bio_coins']:,}</b> BioCoins / <b>{u['premium_coins']:,}</b> 💎 PremiumCoins",
+        f"👤 <b>{uname}</b>  <i>ID: <code>{u['tg_id']}</code></i>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🧫 BioCoins: <code>{u['bio_coins']:,}</code>   💎 Premium: <code>{u['premium_coins']:,}</code>",
     ]
 
     if v:
@@ -137,11 +138,11 @@ def _fmt_player_card(data: dict) -> str:
         for branch in ("LETHALITY", "CONTAGION", "STEALTH"):
             lvl = upgrades.get(branch, {}).get("level", 0)
             emoji = _BRANCH_EMOJI.get(branch, "")
-            upg_parts.append(f"{emoji} {lvl}")
+            upg_parts.append(f"{emoji} <code>{lvl}</code>")
         lines.append(
             f"🦠 Вирус ур.<b>{v.get('level', 1)}</b>"
-            f" (атака {v.get('attack_power', 10)},"
-            f" заразность {v.get('spread_rate', 1.0):.2f})"
+            f"  <i>атака <code>{v.get('attack_power', 10)}</code>,"
+            f" заразность <code>{v.get('spread_rate', 1.0):.2f}</code></i>"
         )
         if upg_parts:
             lines.append("  " + " | ".join(upg_parts))
@@ -152,35 +153,39 @@ def _fmt_player_card(data: dict) -> str:
         for branch in ("BARRIER", "DETECTION", "REGENERATION"):
             lvl = upgrades.get(branch, {}).get("level", 0)
             emoji = _BRANCH_EMOJI.get(branch, "")
-            upg_parts.append(f"{emoji} {lvl}")
+            upg_parts.append(f"{emoji} <code>{lvl}</code>")
         lines.append(
             f"🛡 Иммунитет ур.<b>{im.get('level', 1)}</b>"
-            f" (сопр. {im.get('resistance', 10)})"
+            f"  <i>сопр. <code>{im.get('resistance', 10)}</code></i>"
         )
         if upg_parts:
             lines.append("  " + " | ".join(upg_parts))
 
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
     lines.append(
-        f"⚔️ {data['infections_sent_count']} исходящих,"
-        f" {data['infections_received_count']} входящих"
+        f"⚔️ Заражений: <code>{data['infections_sent_count']}</code> исход. /"
+        f" <code>{data['infections_received_count']}</code> вход."
     )
-    lines.append(f"🏰 {escape(str(data.get('alliance', 'Нет')))}")
-    lines.append(f"📅 Регистрация: {created}")
-    lines.append(f"🕐 Активность: {last_active}")
+    lines.append(f"🏰 Альянс: <i>{escape(str(data.get('alliance', 'Нет')))}</i>")
+    lines.append(f"📅 Рег.: <code>{created}</code>   🕐 Актив.: <code>{last_active}</code>")
     return "\n".join(lines)
 
 
 def _fmt_promo_list(promos: list[dict]) -> str:
     if not promos:
-        return "Промокодов пока нет."
+        return "<i>Промокодов пока нет.</i>"
     lines = []
     for p in promos:
         status = "✅" if p["is_active"] and not p["expired"] else "❌"
-        limit = f"{p['current_activations']}/{p['max_activations']}" if p["max_activations"] > 0 else f"{p['current_activations']}/∞"
-        bio_str = f"+{p['bio_coins']:,} 🧫" if p["bio_coins"] else ""
-        prem_str = f"+{p['premium_coins']:,} 💎" if p["premium_coins"] else ""
-        reward = " ".join(filter(None, [bio_str, prem_str])) or "—"
-        lines.append(f"{status} <b>{escape(p['code'])}</b> ({limit}) {reward}")
+        limit = (
+            f"<code>{p['current_activations']}/{p['max_activations']}</code>"
+            if p["max_activations"] > 0
+            else f"<code>{p['current_activations']}/∞</code>"
+        )
+        bio_str = f"+<code>{p['bio_coins']:,}</code> 🧫" if p["bio_coins"] else ""
+        prem_str = f"+<code>{p['premium_coins']:,}</code> 💎" if p["premium_coins"] else ""
+        reward = " ".join(filter(None, [bio_str, prem_str])) or "<i>—</i>"
+        lines.append(f"{status} <code>{escape(p['code'])}</code> ({limit}) {reward}")
     return "\n".join(lines)
 
 
@@ -189,29 +194,30 @@ def _fmt_promo_detail(info: dict) -> str:
     if info["expired"] and info["is_active"]:
         status = "⏰ Истёк"
     limit = (
-        f"{info['current_activations']}/{info['max_activations']}"
+        f"<code>{info['current_activations']}/{info['max_activations']}</code>"
         if info["max_activations"] > 0
-        else f"{info['current_activations']}/∞"
+        else f"<code>{info['current_activations']}/∞</code>"
     )
     expires_str = info["expires_at"].strftime("%d.%m.%Y %H:%M") if info["expires_at"] else "бессрочно"
     created_str = info["created_at"].strftime("%d.%m.%Y %H:%M") if info["created_at"] else "—"
 
     lines = [
-        f"📋 Промокод <b>{escape(info['code'])}</b>",
+        f"📋 <b>Промокод</b> <code>{escape(info['code'])}</code>",
+        "━━━━━━━━━━━━━━━━━━━━",
         f"Статус: {status}",
-        f"🧫 BioCoins: {info['bio_coins']:,} | 💎 PremiumCoins: {info['premium_coins']:,}",
+        f"🧫 BioCoins: <code>{info['bio_coins']:,}</code>   💎 PremiumCoins: <code>{info['premium_coins']:,}</code>",
         f"Активаций: {limit}",
-        f"Действует до: {expires_str}",
-        f"Создан: {created_str}",
+        f"Действует до: <code>{expires_str}</code>",
+        f"Создан: <code>{created_str}</code>",
     ]
     if info["activations"]:
         lines.append("\n<b>Последние активации:</b>")
         for act in info["activations"][:10]:
             uname = f"@{escape(act['username'])}"
             dt = act["activated_at"].strftime("%d.%m %H:%M")
-            lines.append(f"  • {uname} — {dt}")
+            lines.append(f"  • {uname} — <code>{dt}</code>")
     else:
-        lines.append("\nЕщё никто не активировал.")
+        lines.append("\n<i>Ещё никто не активировал.</i>")
     return "\n".join(lines)
 
 
@@ -265,12 +271,13 @@ async def _get_stats(session: AsyncSession) -> str:
     ).scalar_one()
 
     return (
-        "📊 <b>Статистика BioWars</b>\n\n"
-        f"👥 Игроков: <b>{total_users:,}</b>\n"
-        f"🦠 Активных заражений: <b>{active_infections:,}</b>\n"
-        f"🏰 Альянсов: <b>{total_alliances:,}</b>\n"
-        f"🧫 BioCoins в обороте: <b>{bio_in_circulation:,}</b>\n"
-        f"📋 Активных промокодов: <b>{total_promos:,}</b>"
+        "📊 <b>Статистика BioWars</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👥 Игроков: <code>{total_users:,}</code>\n"
+        f"🦠 Активных заражений: <code>{active_infections:,}</code>\n"
+        f"🏰 Альянсов: <code>{total_alliances:,}</code>\n\n"
+        f"🧫 BioCoins в обороте: <code>{bio_in_circulation:,}</code>\n"
+        f"📋 Активных промокодов: <code>{total_promos:,}</code>"
     )
 
 
@@ -321,9 +328,12 @@ async def cmd_admin(message: Message) -> None:
         return
     await smart_reply(
         message,
-        "⚙️ <b>Админ-панель</b>\n\n"
-        "Добро пожаловать в панель управления BioWars.\n"
-        "Выберите раздел:",
+        "⚙️ <b>Админ-панель BioWars</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "👥 <b>Игроки:</b> поиск, логи, баланс\n"
+        "💰 <b>Финансы:</b> выдача валюты, промокоды\n"
+        "🌍 <b>Ивенты:</b> создание и управление\n\n"
+        "<i>Выберите раздел:</i>",
         reply_markup=admin_menu_kb(),
     )
 
@@ -334,9 +344,12 @@ async def cb_admin_menu(callback: CallbackQuery) -> None:
         await _deny(None, callback)
         return
     await callback.message.edit_text(
-        "⚙️ <b>Админ-панель</b>\n\n"
-        "Добро пожаловать в панель управления BioWars.\n"
-        "Выберите раздел:",
+        "⚙️ <b>Админ-панель BioWars</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "👥 <b>Игроки:</b> поиск, логи, баланс\n"
+        "💰 <b>Финансы:</b> выдача валюты, промокоды\n"
+        "🌍 <b>Ивенты:</b> создание и управление\n\n"
+        "<i>Выберите раздел:</i>",
         reply_markup=admin_menu_kb(),
         parse_mode="HTML",
     )
@@ -419,16 +432,19 @@ async def cmd_promo_list(message: Message, session: AsyncSession) -> None:
         return
 
     promos = await list_promos(session)
+    active_count = sum(1 for p in promos if p["is_active"] and not p["expired"])
     text = (
         "📋 <b>Управление промокодами</b>\n"
-        f"Активных: {sum(1 for p in promos if p['is_active'] and not p['expired'])}\n\n"
-        "Создание:\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"Активных: <code>{active_count}</code>\n\n"
+        "<b>Создание:</b>\n"
         "<code>/promo_create КОД БИО ПРЕМИУМ МАКС [ЧАСЫ]</code>\n\n"
-        "Примеры:\n"
+        "<i>Примеры:</i>\n"
         "<code>/promo_create WELCOME 500 0 100</code>\n"
-        "→ +500 bio, 100 активаций, бессрочно\n\n"
+        "<i>→ +500 bio, 100 активаций, бессрочно</i>\n\n"
         "<code>/promo_create VIP 0 100 10 48</code>\n"
-        "→ +100 premium, 10 активаций, 48ч\n\n"
+        "<i>→ +100 premium, 10 активаций, 48ч</i>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
         "<b>Текущие промокоды:</b>\n"
         + _fmt_promo_list(promos)
     )
@@ -601,7 +617,7 @@ async def cb_admin_stats(callback: CallbackQuery, session: AsyncSession) -> None
 
     text = await _get_stats(session)
     builder = InlineKeyboardBuilder()
-    builder.button(text="🔙 Назад", callback_data="admin_menu")
+    builder.button(text="◀️ Назад", callback_data="admin_menu")
     await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     await callback.answer()
 
@@ -621,14 +637,16 @@ async def cb_admin_promos(callback: CallbackQuery, session: AsyncSession) -> Non
     active_count = sum(1 for p in promos if p["is_active"] and not p["expired"])
     text = (
         "📋 <b>Управление промокодами</b>\n"
-        f"Активных: <b>{active_count}</b>\n\n"
-        "Создание:\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"Активных: <code>{active_count}</code>\n\n"
+        "<b>Создание:</b>\n"
         "<code>/promo_create КОД БИО ПРЕМИУМ МАКС [ЧАСЫ]</code>\n\n"
-        "Примеры:\n"
+        "<i>Примеры:</i>\n"
         "<code>/promo_create WELCOME 500 0 100</code>\n"
-        "→ +500 bio, 100 активаций, бессрочно\n\n"
+        "<i>→ +500 bio, 100 активаций, бессрочно</i>\n\n"
         "<code>/promo_create VIP 0 100 10 48</code>\n"
-        "→ +100 premium, 10 активаций, 48ч\n\n"
+        "<i>→ +100 premium, 10 активаций, 48ч</i>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
         "<b>Текущие промокоды:</b>\n"
         + _fmt_promo_list(promos)
     )
@@ -675,7 +693,8 @@ async def cb_promo_del(callback: CallbackQuery, session: AsyncSession) -> None:
     active_count = sum(1 for p in promos if p["is_active"] and not p["expired"])
     text = (
         "📋 <b>Управление промокодами</b>\n"
-        f"Активных: <b>{active_count}</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"Активных: <code>{active_count}</code>\n\n"
         "<b>Текущие промокоды:</b>\n"
         + _fmt_promo_list(promos)
     )
@@ -1007,9 +1026,12 @@ async def fsm_setbal_input(message: Message, session: AsyncSession, state: FSMCo
 async def cb_admin_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text(
-        "⚙️ <b>Админ-панель</b>\n\n"
-        "Добро пожаловать в панель управления BioWars.\n"
-        "Выберите раздел:",
+        "⚙️ <b>Админ-панель BioWars</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "👥 <b>Игроки:</b> поиск, логи, баланс\n"
+        "💰 <b>Финансы:</b> выдача валюты, промокоды\n"
+        "🌍 <b>Ивенты:</b> создание и управление\n\n"
+        "<i>Выберите раздел:</i>",
         reply_markup=admin_menu_kb(),
         parse_mode="HTML",
     )
@@ -1024,16 +1046,24 @@ async def cb_admin_cancel(callback: CallbackQuery, state: FSMContext) -> None:
 def _fmt_events_admin(events: list) -> str:
     """Format active events list for admin panel."""
     now = datetime.now(UTC).replace(tzinfo=None)
-    text = "🌍 <b>Управление ивентами</b>\n\n"
+    text = (
+        "🌍 <b>Управление ивентами</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+    )
     if events:
         text += "<b>Активные ивенты:</b>\n"
         for e in events:
             emoji = EVENT_EMOJI.get(e.event_type, "🌍")
             delta = (e.ends_at - now).total_seconds()
             remaining_h = max(0, delta / 3600)
-            text += f"{emoji} {escape(e.title)} — ещё {remaining_h:.0f}ч\n"
+            ends_str = e.ends_at.strftime("%d.%m %H:%M")
+            text += (
+                f"{emoji} <b>{escape(e.title)}</b>\n"
+                f"  <i>Осталось: <code>{remaining_h:.0f}ч</code>"
+                f"  до <code>{ends_str}</code> UTC</i>\n"
+            )
     else:
-        text += "Нет активных ивентов."
+        text += "<i>Нет активных ивентов.</i>"
     return text
 
 

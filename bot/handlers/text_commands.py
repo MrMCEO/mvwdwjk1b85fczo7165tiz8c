@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config import get_settings
 from bot.handlers.alliance import _fmt_alliance_info
 from bot.handlers.immunity import _fmt_immunity_stats
-from bot.handlers.info import GUIDE_URL
+from bot.handlers.info import INFO_TEXT, _info_kb
 from bot.handlers.premium import _fmt_premium_menu
 from bot.handlers.profile import _fmt_profile
 from bot.handlers.referral import _fmt_referral_menu
@@ -225,14 +225,12 @@ async def text_shop(message: Message, session: AsyncSession) -> None:
 
 @router.message(F.text.lower().in_(_INFO_TRIGGERS))
 async def text_info(message: Message) -> None:
-    """Текстовая команда: отправить ссылку на гайд."""
+    """Текстовая команда: отправить справку и ссылку на гайд."""
     await smart_reply(
         message,
-        "📖 <b>Полный гайд по BioWars</b>\n\n"
-        "Подробное описание всех механик, веток прокачки, "
-        "формул и советов для новичков:\n\n"
-        f'👉 <a href="{GUIDE_URL}">Открыть гайд</a>',
-        disable_web_page_preview=False,
+        INFO_TEXT,
+        reply_markup=_info_kb(),
+        disable_web_page_preview=True,
     )
 
 
@@ -353,9 +351,12 @@ async def text_admin(message: Message) -> None:
 
     await smart_reply(
         message,
-        "⚙️ <b>Админ-панель</b>\n\n"
-        "Добро пожаловать в панель управления BioWars.\n"
-        "Выберите раздел:",
+        "⚙️ <b>Админ-панель BioWars</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "👥 <b>Игроки:</b> поиск, логи, баланс\n"
+        "💰 <b>Финансы:</b> выдача валюты, промокоды\n"
+        "🌍 <b>Ивенты:</b> создание и управление\n\n"
+        "<i>Выберите раздел:</i>",
         reply_markup=admin_menu_kb(),
     )
 

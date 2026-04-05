@@ -77,7 +77,7 @@ def _fmt_row_username(row: dict) -> str:
 @router.callback_query(lambda c: c.data == "rating_menu")
 async def cb_rating_menu(callback: CallbackQuery) -> None:
     await callback.message.edit_text(
-        "🏆 <b>Рейтинги</b>\n\nВыбери тип рейтинга:",
+        "🏆 <b>Рейтинги</b>\n\n<i>Выбери тип рейтинга:</i>",
         reply_markup=rating_menu_kb(),
         parse_mode="HTML",
     )
@@ -94,12 +94,14 @@ async def cb_rating_infections(callback: CallbackQuery, session: AsyncSession) -
     rows = await get_top_infections(session, limit=10)
 
     if not rows:
-        text = "🦠 <b>Топ по заражениям</b>\n\nПока никто никого не заразил."
+        text = "🦠 <b>Топ по заражениям</b>\n\n<i>Пока никто никого не заразил.</i>"
     else:
         lines = ["🦠 <b>Топ по активным заражениям</b>\n"]
         for i, row in enumerate(rows, start=1):
             display = _fmt_row_username(row)
-            lines.append(f"{_place(i)} {display} — <b>{row['count']}</b> заражений")
+            lines.append(f"{_place(i)} {display} — <code>{row['count']}</code> заражений")
+        lines.append("")
+        lines.append(f"<i>Показаны топ-{len(rows)} игроков</i>")
         text = "\n".join(lines)
 
     await callback.message.edit_text(
@@ -115,7 +117,7 @@ async def cb_rating_virus(callback: CallbackQuery, session: AsyncSession) -> Non
     rows = await get_top_virus_level(session, limit=10)
 
     if not rows:
-        text = "⚔️ <b>Топ по уровню вируса</b>\n\nНет данных."
+        text = "⚔️ <b>Топ по уровню вируса</b>\n\n<i>Нет данных.</i>"
     else:
         lines = ["⚔️ <b>Топ по уровню вируса</b>\n"]
         for i, row in enumerate(rows, start=1):
@@ -125,9 +127,11 @@ async def cb_rating_virus(callback: CallbackQuery, session: AsyncSession) -> Non
                 row.get("virus_name_entities"),
             )
             lines.append(
-                f"{_place(i)} {display} — <b>ур. {row['level']}</b>"
+                f"{_place(i)} {display} — ур. <code>{row['level']}</code>"
                 f" (<i>{virus_name}</i>)"
             )
+        lines.append("")
+        lines.append(f"<i>Показаны топ-{len(rows)} игроков</i>")
         text = "\n".join(lines)
 
     await callback.message.edit_text(
@@ -143,12 +147,14 @@ async def cb_rating_immunity(callback: CallbackQuery, session: AsyncSession) -> 
     rows = await get_top_immunity_level(session, limit=10)
 
     if not rows:
-        text = "🛡 <b>Топ по уровню иммунитета</b>\n\nНет данных."
+        text = "🛡 <b>Топ по уровню иммунитета</b>\n\n<i>Нет данных.</i>"
     else:
         lines = ["🛡 <b>Топ по уровню иммунитета</b>\n"]
         for i, row in enumerate(rows, start=1):
             display = _fmt_row_username(row)
-            lines.append(f"{_place(i)} {display} — <b>ур. {row['level']}</b>")
+            lines.append(f"{_place(i)} {display} — ур. <code>{row['level']}</code>")
+        lines.append("")
+        lines.append(f"<i>Показаны топ-{len(rows)} игроков</i>")
         text = "\n".join(lines)
 
     await callback.message.edit_text(
@@ -164,12 +170,14 @@ async def cb_rating_richest(callback: CallbackQuery, session: AsyncSession) -> N
     rows = await get_top_richest(session, limit=10)
 
     if not rows:
-        text = "💰 <b>Топ по богатству</b>\n\nНет данных."
+        text = "💰 <b>Топ по богатству</b>\n\n<i>Нет данных.</i>"
     else:
         lines = ["💰 <b>Топ богатейших игроков</b>\n"]
         for i, row in enumerate(rows, start=1):
             display = _fmt_row_username(row)
-            lines.append(f"{_place(i)} {display} — <b>{row['bio_coins']:,}</b> 🧫")
+            lines.append(f"{_place(i)} {display} — <code>{row['bio_coins']:,}</code> 🧫")
+        lines.append("")
+        lines.append(f"<i>Показаны топ-{len(rows)} игроков</i>")
         text = "\n".join(lines)
 
     await callback.message.edit_text(

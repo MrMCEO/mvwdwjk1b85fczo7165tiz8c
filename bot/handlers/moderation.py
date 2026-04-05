@@ -247,7 +247,9 @@ async def cmd_ban(message: Message, bot: Bot) -> None:
 
     await smart_reply(
         message,
-        f"🚫 {name} забанен на {duration_str}.\nПричина: {escape(reason)}",
+        f"🚫 <b>{escape(name)}</b> забанен на <code>{duration_str}</code>.\n"
+        f"Причина: <i>{escape(reason)}</i>",
+        parse_mode="HTML",
     )
 
 
@@ -334,7 +336,9 @@ async def cmd_mute(message: Message, bot: Bot) -> None:
 
     await smart_reply(
         message,
-        f"🔇 {name} замучен на {duration_str}.\nПричина: {escape(reason)}",
+        f"🔇 <b>{escape(name)}</b> замучен на <code>{duration_str}</code>.\n"
+        f"Причина: <i>{escape(reason)}</i>",
+        parse_mode="HTML",
     )
 
 
@@ -389,7 +393,7 @@ async def cmd_unban(message: Message, bot: Bot) -> None:
     except TelegramAPIError:
         name = f"id{target_id}"
 
-    await smart_reply(message, f"✅ {name} разбанен.")
+    await smart_reply(message, f"✅ <b>{escape(name)}</b> разбанен.")
 
 
 # ---------------------------------------------------------------------------
@@ -455,7 +459,7 @@ async def cmd_unmute(message: Message, bot: Bot) -> None:
     except TelegramAPIError:
         name = f"id{target_id}"
 
-    await smart_reply(message, f"🔊 {name} размучен.")
+    await smart_reply(message, f"🔊 <b>{escape(name)}</b> размучен.")
 
 
 # ---------------------------------------------------------------------------

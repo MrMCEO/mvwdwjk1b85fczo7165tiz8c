@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -59,6 +60,7 @@ def mutations_menu_kb(mutations: list[Mutation]) -> InlineKeyboardMarkup:
 
     Each mutation gets its own row showing: rarity emoji, name, remaining time.
     Buttons are not interactive (callback just answers the same menu).
+    Active mutations shown with SUCCESS style; empty-state shown with PRIMARY.
     """
     builder = InlineKeyboardBuilder()
 
@@ -66,6 +68,7 @@ def mutations_menu_kb(mutations: list[Mutation]) -> InlineKeyboardMarkup:
         builder.button(
             text="— Нет активных мутаций —",
             callback_data="mutations_menu",
+            style=ButtonStyle.PRIMARY,
         )
     else:
         for m in mutations:
@@ -75,6 +78,7 @@ def mutations_menu_kb(mutations: list[Mutation]) -> InlineKeyboardMarkup:
             builder.button(
                 text=f"{emoji} {label} [{remaining}]",
                 callback_data="mutations_menu",
+                style=ButtonStyle.SUCCESS,
             )
 
     builder.button(text="◀️ Назад", callback_data="main_menu")

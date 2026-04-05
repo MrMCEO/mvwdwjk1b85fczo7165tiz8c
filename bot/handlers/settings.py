@@ -31,10 +31,14 @@ async def _get_user(session: AsyncSession, tg_id: int) -> User | None:
 def _settings_text(user: User) -> str:
     return (
         "⚙️ <b>Настройки уведомлений</b>\n\n"
-        f"⚔️ Атаки: {'✅ Вкл' if user.notify_attacks else '❌ Выкл'}\n"
-        f"🦠 Заражения: {'✅ Вкл' if user.notify_infections else '❌ Выкл'}\n"
-        f"⏱ Кулдауны: {'✅ Вкл' if user.notify_cooldowns else '❌ Выкл'}\n"
-        f"🌍 Ивенты: {'✅ Вкл' if user.notify_events else '❌ Выкл'}\n"
+        f"⚔️ <b>Атаки</b>: {'✅ Вкл' if user.notify_attacks else '❌ Выкл'}\n"
+        f"<i>Уведомления о входящих и исходящих атаках.</i>\n\n"
+        f"🦠 <b>Заражения</b>: {'✅ Вкл' if user.notify_infections else '❌ Выкл'}\n"
+        f"<i>Уведомления о новых заражениях твоего вируса.</i>\n\n"
+        f"⏱ <b>Кулдауны</b>: {'✅ Вкл' if user.notify_cooldowns else '❌ Выкл'}\n"
+        f"<i>Уведомления об окончании перезарядки.</i>\n\n"
+        f"🌍 <b>Ивенты</b>: {'✅ Вкл' if user.notify_events else '❌ Выкл'}\n"
+        f"<i>Уведомления о глобальных игровых событиях.</i>\n"
     )
 
 

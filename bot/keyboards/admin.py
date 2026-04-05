@@ -34,11 +34,14 @@ EVENT_NAMES: dict[EventType, str] = {
 def admin_menu_kb() -> InlineKeyboardMarkup:
     """Main admin panel navigation keyboard."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="📋 Промокоды",    callback_data="admin_promos")
-    builder.button(text="🔍 Найти игрока", callback_data="admin_find_player")
-    builder.button(text="💰 Выдать валюту", callback_data="admin_give_start")
-    builder.button(text="📊 Статистика",   callback_data="admin_stats")
-    builder.button(text="🌍 Ивенты",       callback_data="admin_events")
+    # Управление игроками
+    builder.button(text="🔍 Найти игрока",  callback_data="admin_find_player", style=ButtonStyle.PRIMARY)
+    builder.button(text="📊 Статистика",    callback_data="admin_stats",       style=ButtonStyle.PRIMARY)
+    # Финансы
+    builder.button(text="💰 Выдать валюту", callback_data="admin_give_start",  style=ButtonStyle.SUCCESS)
+    builder.button(text="📋 Промокоды",     callback_data="admin_promos",      style=ButtonStyle.PRIMARY)
+    # Ивенты
+    builder.button(text="🌍 Ивенты",        callback_data="admin_events",      style=ButtonStyle.SUCCESS)
     builder.adjust(2, 2, 1)
     return builder.as_markup()
 
@@ -56,8 +59,9 @@ def admin_promos_kb(promos: list[dict]) -> InlineKeyboardMarkup:
         builder.button(
             text=f"{status} {p['code']} ({limit_str})",
             callback_data=f"admin_promo_info_{p['code']}",
+            style=ButtonStyle.PRIMARY,
         )
-    builder.button(text="🔙 Назад", callback_data="admin_menu")
+    builder.button(text="◀️ Назад", callback_data="admin_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -67,7 +71,7 @@ def admin_promo_detail_kb(code: str, is_active: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     if is_active:
         builder.button(text="🗑 Деактивировать", callback_data=f"admin_promo_del_{code}", style=ButtonStyle.DANGER)
-    builder.button(text="🔙 Промокоды", callback_data="admin_promos")
+    builder.button(text="◀️ Промокоды", callback_data="admin_promos")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -75,11 +79,14 @@ def admin_promo_detail_kb(code: str, is_active: bool) -> InlineKeyboardMarkup:
 def admin_player_kb(user_id: int) -> InlineKeyboardMarkup:
     """Per-player action keyboard."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="📋 Логи прокачки",     callback_data=f"admin_logs_{user_id}_upgrades")
-    builder.button(text="⚔️ Логи атак",         callback_data=f"admin_logs_{user_id}_attacks")
-    builder.button(text="💰 Логи транзакций",   callback_data=f"admin_logs_{user_id}_purchases")
-    builder.button(text="💵 Выдать валюту",      callback_data=f"admin_give_{user_id}",   style=ButtonStyle.SUCCESS)
-    builder.button(text="⚙️ Установить баланс",  callback_data=f"admin_setbal_{user_id}")
+    # Логи
+    builder.button(text="📋 Логи прокачки",     callback_data=f"admin_logs_{user_id}_upgrades",  style=ButtonStyle.PRIMARY)
+    builder.button(text="⚔️ Логи атак",         callback_data=f"admin_logs_{user_id}_attacks",   style=ButtonStyle.PRIMARY)
+    builder.button(text="💰 Логи транзакций",   callback_data=f"admin_logs_{user_id}_purchases", style=ButtonStyle.PRIMARY)
+    # Управление балансом
+    builder.button(text="💵 Выдать валюту",      callback_data=f"admin_give_{user_id}",           style=ButtonStyle.SUCCESS)
+    builder.button(text="⚙️ Установить баланс",  callback_data=f"admin_setbal_{user_id}",         style=ButtonStyle.PRIMARY)
+    # Навигация
     builder.button(text="◀️ Назад",              callback_data="admin_find_player")
     builder.adjust(3, 2, 1)
     return builder.as_markup()

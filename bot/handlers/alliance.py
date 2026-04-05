@@ -24,6 +24,7 @@ from bot.keyboards.alliance import (
     alliance_confirm_dissolve_kb,
     alliance_confirm_leave_kb,
     alliance_info_kb,
+    alliance_member_detail_kb,
     alliance_members_kb,
     alliance_no_clan_kb,
     alliance_privacy_kb,
@@ -331,10 +332,59 @@ async def cb_alliance_members_page(
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith("alliance_member_info_"))
-async def cb_member_info_noop(callback: CallbackQuery) -> None:
-    """Noop — member name buttons just show a tooltip."""
-    await callback.answer("Нажми кнопку действия рядом с именем.")
+@router.callback_query(lambda c: c.data and c.data.startswith("ally_member_"))
+async def cb_ally_member_detail(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Show mini-profile for a specific alliance member + role-dependent action buttons."""
+    try:
+        target_id = int(callback.data[len("ally_member_"):])
+    except ValueError:
+        await callback.answer("❌ Неверный ID.", show_alert=True)
+        return
+
+    info = await get_alliance_info(session, callback.from_user.id)
+    if info is None:
+        await callback.answer("❌ Ты не в альянсе.", show_alert=True)
+        return
+
+    members = await get_alliance_members(session, info["id"])
+
+    # Find target member in list
+    target = next((m for m in members if m["user_id"] == target_id), None)
+    if target is None:
+        await callback.answer("❌ Участник не найден.", show_alert=True)
+        return
+
+    role_label = target["role_label"]
+    uname = escape(target["username"])
+    virus_lvl = target.get("virus_level", 0)
+    immunity_lvl = target.get("immunity_level", 0)
+
+    text = (
+        f"👤 <b>{uname}</b>\n"
+        f"🏅 Роль: <b>{role_label}</b>\n"
+        f"🦠 Вирус ур. <b>{virus_lvl}</b>\n"
+        f"🛡 Иммунитет ур. <b>{immunity_lvl}</b>"
+    )
+
+    # Determine which page the member is on (page_size=8)
+    page_size = 8
+    idx = next((i for i, m in enumerate(members) if m["user_id"] == target_id), 0)
+    page = idx // page_size
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=alliance_member_detail_kb(
+            target_id=target_id,
+            target_role=target["role"],
+            viewer_role=info["user_role"],
+            viewer_id=callback.from_user.id,
+            page=page,
+        ),
+        parse_mode="HTML",
+    )
+    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -399,8 +449,9 @@ async def cb_alliance_kick_list(
 
     members = await get_alliance_members(session, info["id"])
     text = (
-        "🚫 <b>Исключить участника</b>\n\n"
-        "Нажми «🚫 Кик» напротив игрока:"
+        f"👥 <b>Участники [{escape(info['tag'])}] {escape(info['name'])}</b>\n\n"
+        f"Всего: <b>{len(members)}/{info['max_members']}</b>\n\n"
+        "Выбери участника, чтобы кикнуть его:"
     )
     await callback.message.edit_text(
         text,

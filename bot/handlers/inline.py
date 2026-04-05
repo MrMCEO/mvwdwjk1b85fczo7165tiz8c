@@ -11,12 +11,17 @@ Requires inline mode to be enabled in BotFather for the bot.
 from __future__ import annotations
 
 from aiogram import Router
-from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
+from aiogram.types import (
+    InlineQuery,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    MessageEntity,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.services.player import get_player_profile
 from bot.services.premium import STATUS_CONFIG, UserStatus, format_username
-from bot.utils.emoji import render_virus_name
+from bot.utils.emoji import virus_name_entities
 
 router = Router(name="inline")
 
@@ -84,7 +89,7 @@ async def inline_handler(query: InlineQuery, session: AsyncSession) -> None:
     v = profile.get("virus") or {}
     im = profile.get("immunity") or {}
 
-    virus_name = render_virus_name(v.get("name", "—"), v.get("name_entities_json"))
+    virus_name_raw: str = v.get("name", "—")
     virus_level = v.get("level", 0)
     immunity_level = im.get("level", 0)
     sent = profile.get("infections_sent_count", 0)
@@ -102,28 +107,60 @@ async def inline_handler(query: InlineQuery, session: AsyncSession) -> None:
 
     bio_coins: int = u.get("bio_coins", 0)
 
+    # Build card as plain text so that we can pass MessageEntity objects for
+    # both bold formatting and custom emoji.  Telegram inline results support
+    # the ``entities`` parameter of InputTextMessageContent; using it together
+    # with parse_mode="HTML" is not allowed, so we express ALL formatting via
+    # entities instead.
+    header = "🧬 BioWars — Карточка игрока\n\n"
+    line_name = f"👤 {display_name}\n"
+    line_status = f"🏅 Статус: {status_emoji} {status_name}\n"
+    line_virus_prefix = "🦠 Вирус: "
+    line_virus_suffix = f" (ур. {virus_level})\n"
+    line_immunity = f"🛡 Иммунитет: ур. {immunity_level}\n"
+    line_sent = f"⚔️ Заражений: {sent} исходящих\n"
+    line_coins = f"💰 {bio_coins:,} 🧫\n\n"
+    line_bot = "👉 @BestBIOwarsrobot"
+
     card_text = (
-        f"🧬 <b>BioWars — Карточка игрока</b>\n\n"
-        f"👤 {display_name}\n"
-        f"🏅 Статус: {status_emoji} {status_name}\n"
-        f"🦠 Вирус: {virus_name} (ур. {virus_level})\n"
-        f"🛡 Иммунитет: ур. {immunity_level}\n"
-        f"⚔️ Заражений: {sent} исходящих\n"
-        f"💰 {bio_coins:,} 🧫\n\n"
-        f"👉 @BestBIOwarsrobot"
+        header
+        + line_name
+        + line_status
+        + line_virus_prefix
+        + virus_name_raw
+        + line_virus_suffix
+        + line_immunity
+        + line_sent
+        + line_coins
+        + line_bot
+    )
+
+    # --- Entities ---------------------------------------------------------- #
+    # Bold for the header line "BioWars — Карточка игрока"
+    bold_start = len("🧬 ")
+    bold_text = "BioWars — Карточка игрока"
+    card_entities: list[MessageEntity] = [
+        MessageEntity(type="bold", offset=bold_start, length=len(bold_text)),
+    ]
+
+    # Custom emoji entities for the virus name (shifted to their position in
+    # the full card_text).
+    virus_offset = len(header + line_name + line_status + line_virus_prefix)
+    card_entities.extend(
+        virus_name_entities(
+            virus_name_raw,
+            v.get("name_entities_json"),
+            offset=virus_offset,
+        )
     )
 
     result_card = InlineQueryResultArticle(
         id="my_card",
         title=f"🧬 Моя карточка — Вирус ур. {virus_level}",
-        description=(
-            f"🦠 {v.get('name', 'Вирус')} | "
-            f"🛡 Иммунитет ур. {immunity_level} | "
-            f"{bio_coins:,} 🧫"
-        ),
+        description=(f"🦠 {virus_name_raw} | 🛡 Иммунитет ур. {immunity_level} | {bio_coins:,} 🧫"),
         input_message_content=InputTextMessageContent(
             message_text=card_text,
-            parse_mode="HTML",
+            entities=card_entities,
         ),
     )
 

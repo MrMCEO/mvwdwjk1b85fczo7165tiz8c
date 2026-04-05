@@ -111,6 +111,13 @@ def alliance_requests_kb(requests: list[dict]) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+ROLE_ICONS: dict[AllianceRole, str] = {
+    AllianceRole.LEADER: "👑",
+    AllianceRole.OFFICER: "⚔️",
+    AllianceRole.MEMBER: "👤",
+}
+
+
 def alliance_members_kb(
     members: list[dict],
     viewer_role: AllianceRole,
@@ -119,11 +126,13 @@ def alliance_members_kb(
     page_size: int = 8,
 ) -> InlineKeyboardMarkup:
     """
-    Paginated list of alliance members with action buttons.
+    Paginated list of alliance members as clickable buttons.
 
-    For LEADER: each OFFICER/MEMBER row has Понизить/Исключить buttons.
-    For OFFICER: each MEMBER row has Исключить button.
-    Navigation at the bottom.
+    Each button: "{role_emoji} {username} (ур. {virus_level})"
+    callback_data: ally_member_{user_tg_id}
+
+    Navigation at the bottom (◀️ ▶️) if members > page_size.
+    Back button leads to alliance menu.
     """
     builder = InlineKeyboardBuilder()
 
@@ -135,48 +144,24 @@ def alliance_members_kb(
     for m in page_items:
         uid = m["user_id"]
         uname = m["username"]
-        role_icon = {
-            AllianceRole.LEADER: "👑",
-            AllianceRole.OFFICER: "⚔️",
-            AllianceRole.MEMBER: "👤",
-        }[m["role"]]
+        role_icon = ROLE_ICONS[m["role"]]
+        virus_lvl = m.get("virus_level", 0)
 
-        # Info row (non-clickable label styled as info)
         builder.button(
-            text=f"{role_icon} {uname}",
-            callback_data=f"alliance_member_info_{uid}",
+            text=f"{role_icon} {uname} (ур. {virus_lvl})",
+            callback_data=f"ally_member_{uid}",
         )
-
-        # Action buttons for managers (skip self)
-        if uid != viewer_id:
-            if viewer_role == AllianceRole.LEADER:
-                if m["role"] == AllianceRole.MEMBER:
-                    builder.button(
-                        text="⬆️ Повысить", callback_data=f"alliance_promote_{uid}"
-                    )
-                elif m["role"] == AllianceRole.OFFICER:
-                    builder.button(
-                        text="⬇️ Понизить", callback_data=f"alliance_demote_{uid}"
-                    )
-                if m["role"] != AllianceRole.LEADER:
-                    builder.button(
-                        text="🚫 Кик", callback_data=f"alliance_kick_{uid}"
-                    )
-            elif viewer_role == AllianceRole.OFFICER and m["role"] == AllianceRole.MEMBER:
-                builder.button(
-                    text="🚫 Кик", callback_data=f"alliance_kick_{uid}"
-                )
 
     builder.adjust(1)
 
-    # Navigation row
-    nav_builder = InlineKeyboardBuilder()
-    if page > 0:
-        nav_builder.button(text="◀", callback_data=f"alliance_members_pg_{page - 1}")
-    nav_builder.button(text=f"{page + 1}/{total_pages}", callback_data="noop")
-    if end < len(members):
-        nav_builder.button(text="▶", callback_data=f"alliance_members_pg_{page + 1}")
-    if len(nav_builder.export()) > 0:
+    # Navigation row (only if more than one page)
+    if total_pages > 1:
+        nav_builder = InlineKeyboardBuilder()
+        if page > 0:
+            nav_builder.button(text="◀️", callback_data=f"alliance_members_pg_{page - 1}")
+        nav_builder.button(text=f"{page + 1}/{total_pages}", callback_data="noop")
+        if end < len(members):
+            nav_builder.button(text="▶️", callback_data=f"alliance_members_pg_{page + 1}")
         for row in nav_builder.export():
             builder.row(*row)
 
@@ -186,6 +171,57 @@ def alliance_members_kb(
         .export()[0]
     )
 
+    return builder.as_markup()
+
+
+def alliance_member_detail_kb(
+    target_id: int,
+    target_role: AllianceRole,
+    viewer_role: AllianceRole,
+    viewer_id: int,
+    page: int = 0,
+) -> InlineKeyboardMarkup:
+    """
+    Action keyboard for a specific member.
+
+    Permissions:
+    - LEADER sees: ⬆️ Повысить / ⬇️ Понизить, ❌ Кикнуть (except self and other LEADERs).
+    - OFFICER sees: ❌ Кикнуть (only for MEMBERs, not self).
+    - MEMBER sees: only 🔙 Назад.
+    Always includes 🔙 Назад (returns to members list).
+    """
+    builder = InlineKeyboardBuilder()
+
+    is_self = target_id == viewer_id
+    can_manage = not is_self and target_role != AllianceRole.LEADER
+
+    if viewer_role == AllianceRole.LEADER and can_manage:
+        if target_role == AllianceRole.MEMBER:
+            builder.button(
+                text="⬆️ Повысить",
+                callback_data=f"alliance_promote_{target_id}",
+            )
+        elif target_role == AllianceRole.OFFICER:
+            builder.button(
+                text="⬇️ Понизить",
+                callback_data=f"alliance_demote_{target_id}",
+            )
+        builder.button(
+            text="❌ Кикнуть",
+            callback_data=f"alliance_kick_{target_id}",
+        )
+    elif viewer_role == AllianceRole.OFFICER and not is_self and target_role == AllianceRole.MEMBER:
+        builder.button(
+            text="❌ Кикнуть",
+            callback_data=f"alliance_kick_{target_id}",
+        )
+
+    builder.button(
+        text="🔙 Назад",
+        callback_data=f"alliance_members_pg_{page}",
+    )
+
+    builder.adjust(1)
     return builder.as_markup()
 
 

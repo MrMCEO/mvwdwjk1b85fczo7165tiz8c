@@ -25,8 +25,10 @@ from bot.models.alliance import (
     AllianceRole,
     JoinRequestStatus,
 )
+from bot.models.immunity import Immunity
 from bot.models.resource import Currency, ResourceTransaction, TransactionReason
 from bot.models.user import User
+from bot.models.virus import Virus
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -563,7 +565,8 @@ async def get_alliance_members(
     """
     Return a list of members for the given alliance.
 
-    Each dict has: user_id, username, role (AllianceRole), joined_at.
+    Each dict has: user_id, username, role (AllianceRole), joined_at,
+    virus_level, immunity_level.
     Sorted by role priority (LEADER first, then OFFICER, then MEMBER),
     then by joined_at ascending.
     """
@@ -574,6 +577,19 @@ async def get_alliance_members(
         .order_by(AllianceMember.joined_at)
     )
     rows = result.all()
+
+    # Fetch virus and immunity levels in bulk
+    user_ids = [user.tg_id for _, user in rows]
+
+    virus_result = await session.execute(
+        select(Virus.owner_id, Virus.level).where(Virus.owner_id.in_(user_ids))
+    )
+    virus_levels: dict[int, int] = dict(virus_result.all())
+
+    immunity_result = await session.execute(
+        select(Immunity.owner_id, Immunity.level).where(Immunity.owner_id.in_(user_ids))
+    )
+    immunity_levels: dict[int, int] = dict(immunity_result.all())
 
     role_order = {AllianceRole.LEADER: 0, AllianceRole.OFFICER: 1, AllianceRole.MEMBER: 2}
 
@@ -586,6 +602,8 @@ async def get_alliance_members(
                 "role": am.role,
                 "role_label": ROLE_LABELS[am.role],
                 "joined_at": am.joined_at,
+                "virus_level": virus_levels.get(user.tg_id, 0),
+                "immunity_level": immunity_levels.get(user.tg_id, 0),
             }
         )
 

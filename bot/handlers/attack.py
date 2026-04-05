@@ -20,6 +20,7 @@ from bot.services.combat import (
     attack_player,
     get_active_infections_by,
     get_active_infections_on,
+    get_random_target,
     try_cure,
 )
 from bot.services.notifications import should_notify
@@ -119,6 +120,45 @@ async def msg_attack_username(
         "Атаковать этого игрока?",
         reply_markup=attack_confirm_kb(target.tg_id),
     )
+
+
+# ---------------------------------------------------------------------------
+# Random attack
+# ---------------------------------------------------------------------------
+
+
+@router.callback_query(lambda c: c.data == "random_attack")
+async def cb_random_attack(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Pick a random eligible target and show the confirmation screen."""
+    target = await get_random_target(session, callback.from_user.id)
+
+    if target is None:
+        await callback.message.edit_text(
+            "🎲 <b>Случайная атака</b>\n\n"
+            "❌ Нет доступных целей для атаки.\n"
+            "(Все игроки уже заражены или ты единственный участник.)",
+            reply_markup=attack_menu_kb(),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
+    virus_level = target.virus.level if target.virus else 0
+    immunity_level = target.immunity.level if target.immunity else 0
+    target_display = f"@{escape(target.username)}" if target.username else f"id{target.tg_id}"
+
+    await callback.message.edit_text(
+        f"🎲 <b>Случайная атака</b>\n\n"
+        f"Цель: <b>{target_display}</b>\n"
+        f"Уровень вируса: <b>{virus_level}</b>\n"
+        f"Уровень иммунитета: <b>{immunity_level}</b>\n\n"
+        "Атаковать этого игрока?",
+        reply_markup=attack_confirm_kb(target.tg_id),
+        parse_mode="HTML",
+    )
+    await callback.answer()
 
 
 # ---------------------------------------------------------------------------

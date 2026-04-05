@@ -4,6 +4,58 @@ from __future__ import annotations
 
 import html
 import json
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from aiogram.types import MessageEntity
+
+
+def virus_name_entities(
+    name: str,
+    entities_json: str | None,
+    offset: int = 0,
+) -> list[MessageEntity]:
+    """Return a list of MessageEntity objects for a virus name.
+
+    This is used when building inline-mode messages with the ``entities``
+    parameter of ``InputTextMessageContent``, where ``parse_mode`` is not
+    set and all formatting must be expressed via entities.
+
+    Args:
+        name: Raw virus name string (as stored in DB).
+        entities_json: JSON string with ``[{offset, length, custom_emoji_id}]``
+                       or *None* when no custom emoji are present.
+        offset: Character offset of the virus name within the full message
+                text.  Entities returned will have their ``offset`` shifted
+                by this value so they point to the correct position in the
+                complete message.
+
+    Returns:
+        List of ``MessageEntity`` (may be empty).  Import is deferred to
+        avoid a hard dependency on aiogram at module import time.
+    """
+    # Late import so the module stays importable in unit tests that don't
+    # have aiogram installed.
+    from aiogram.types import MessageEntity as ME  # noqa: PLC0415
+
+    if not entities_json:
+        return []
+
+    raw_entities = json.loads(entities_json)
+    if not raw_entities:
+        return []
+
+    result: list[ME] = []
+    for ent in raw_entities:
+        result.append(
+            ME(
+                type="custom_emoji",
+                offset=offset + ent["offset"],
+                length=ent["length"],
+                custom_emoji_id=str(ent["custom_emoji_id"]),
+            )
+        )
+    return result
 
 
 def render_virus_name(name: str, entities_json: str | None) -> str:

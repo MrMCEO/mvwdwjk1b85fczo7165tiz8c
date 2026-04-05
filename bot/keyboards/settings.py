@@ -35,6 +35,6 @@ def settings_kb(user: User) -> InlineKeyboardMarkup:
         callback_data="toggle_notify_events",
         style=_toggle_style(user.notify_events),
     )
-    builder.button(text="◀️ Назад", callback_data="main_menu")
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()

@@ -16,7 +16,7 @@ def transfer_menu_kb(daily_used: int, daily_limit: int) -> InlineKeyboardMarkup:
         builder.button(text="💸 Перевести монеты", callback_data="transfer_start", style=ButtonStyle.SUCCESS)
     else:
         builder.button(text="🚫 Лимит исчерпан", callback_data="transfer_start", style=ButtonStyle.DANGER)
-    builder.button(text="◀️ Назад", callback_data="main_menu")
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -37,5 +37,5 @@ def transfer_confirm_kb(username: str, amount: int, received: int, commission: i
 def transfer_back_kb() -> InlineKeyboardMarkup:
     """Simple back button to transfer menu."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="◀️ Назад", callback_data="transfer_menu")
+    builder.button(text="🔙 Назад", callback_data="transfer_menu")
     return builder.as_markup()

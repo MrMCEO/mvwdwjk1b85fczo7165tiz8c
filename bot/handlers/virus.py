@@ -52,9 +52,10 @@ def _fmt_virus_stats(data: dict) -> str:
 
     lines = [
         "🦠 <b>Мой вирус</b>\n",
-        f"Имя: <b>{display_name}</b>",
-        f"Уровень: <b>{total_level}</b>",
+        f"📛 Имя: <b>{display_name}</b>",
+        f"⭐ Уровень: <code>{total_level}</code>",
         "",
+        "━━━━━━━━━━━━━━━",
         "<b>Ветки прокачки:</b>",
     ]
 
@@ -62,11 +63,12 @@ def _fmt_virus_stats(data: dict) -> str:
     for branch_key, info in upgrades.items():
         icon = icons.get(branch_key, "•")
         next_cost = info.get("next_cost")
-        cost_text = "МАКС" if next_cost is None else f"{next_cost} 🧫"
+        cost_text = "<i>макс.</i>" if next_cost is None else f"<code>{next_cost}</code> 🧫"
         lines.append(
-            f"{icon} {info['name']}: ур. <b>{info['level']}</b>  │  {cost_text}"
+            f"{icon} {info['name']}: ур. <code>{info['level']}</code>  │  {cost_text}"
         )
 
+    lines += ["", "<i>Нажми кнопку ниже для прокачки ветки</i>"]
     return "\n".join(lines)
 
 

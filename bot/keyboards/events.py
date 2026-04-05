@@ -42,8 +42,9 @@ def events_menu_kb(events: list[Event]) -> InlineKeyboardMarkup:
 
     if not events:
         builder.button(
-            text="— Активных ивентов нет —",
+            text="🌍 Активных ивентов нет",
             callback_data="events_menu",
+            style=ButtonStyle.PRIMARY,
         )
     else:
         for event in events:
@@ -54,7 +55,7 @@ def events_menu_kb(events: list[Event]) -> InlineKeyboardMarkup:
                 style=ButtonStyle.PRIMARY,
             )
 
-    builder.button(text="◀️ Назад", callback_data="main_menu")
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -109,7 +110,7 @@ def pandemic_kb(event_id: int) -> InlineKeyboardMarkup:
         style=ButtonStyle.PRIMARY,
     )
     builder.button(
-        text="◀️ К ивентам",
+        text="🔙 К ивентам",
         callback_data="events_menu",
     )
     builder.adjust(1)

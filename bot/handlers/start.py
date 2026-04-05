@@ -96,8 +96,8 @@ def _welcome_new_kb() -> InlineKeyboardMarkup:
                 ),
             ],
             [
-                InlineKeyboardButton(text="📢 Канал", url=_CHANNEL_URL),
-                InlineKeyboardButton(text="🎁 Бонус", callback_data="channel_bonus"),
+                InlineKeyboardButton(text="📢 Канал", url=_CHANNEL_URL, style=ButtonStyle.PRIMARY),
+                InlineKeyboardButton(text="🎁 Бонус", callback_data="channel_bonus", style=ButtonStyle.SUCCESS),
             ],
         ]
     )
@@ -108,7 +108,7 @@ def _guide_back_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="◀️ Назад",
+                    text="🔙 Назад",
                     callback_data="start_play",
                 ),
             ]

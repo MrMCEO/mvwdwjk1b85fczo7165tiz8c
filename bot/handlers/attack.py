@@ -45,8 +45,8 @@ async def cb_attack_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text(
         "⚔️ <b>Атака</b>\n\n"
-        "Выбери цель для заражения.\n"
-        "Введи @username или используй быструю атаку.",
+        "<i>Выбери цель для заражения.\n"
+        "Введи @username или используй быструю атаку.</i>",
         reply_markup=attack_menu_kb(),
         parse_mode="HTML",
     )
@@ -64,8 +64,8 @@ async def cb_attack_enter(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AttackStates.waiting_for_username)
     await callback.message.edit_text(
         "⚔️ <b>Введи @username цели</b>\n\n"
-        "Напиши username игрока которого хочешь атаковать\n"
-        "(можно без символа @).",
+        "<i>Напиши username игрока которого хочешь атаковать\n"
+        "(можно без символа @).</i>",
         reply_markup=back_button("attack_menu"),
         parse_mode="HTML",
     )
@@ -118,10 +118,10 @@ async def msg_attack_username(
     await smart_reply(
         message,
         f"⚔️ <b>Подтверждение атаки</b>\n\n"
-        f"Цель: <b>{target_display}</b>\n"
-        f"🦠 Вирус цели: ур. <b>{virus_level}</b>\n"
-        f"🛡 Иммунитет цели: ур. <b>{immunity_level}</b>\n\n"
-        "Атаковать?",
+        f"🎯 Цель: <b>{target_display}</b>\n"
+        f"🦠 Вирус цели: ур. <code>{virus_level}</code>\n"
+        f"🛡 Иммунитет цели: ур. <code>{immunity_level}</code>\n\n"
+        "<i>Атаковать?</i>",
         reply_markup=attack_confirm_kb(target.tg_id),
     )
 
@@ -150,7 +150,7 @@ async def cb_random_attack(
         await callback.message.edit_text(
             "🎲 <b>Случайная атака</b>\n\n"
             "❌ Нет доступных целей для атаки.\n"
-            "(Все игроки уже заражены или ты единственный участник.)",
+            "<i>(Все игроки уже заражены или ты единственный участник.)</i>",
             reply_markup=attack_menu_kb(),
             parse_mode="HTML",
         )
@@ -163,10 +163,10 @@ async def cb_random_attack(
 
     await callback.message.edit_text(
         f"⚔️ <b>Подтверждение атаки</b>\n\n"
-        f"Цель: <b>{target_display}</b>\n"
-        f"🦠 Вирус цели: ур. <b>{virus_level}</b>\n"
-        f"🛡 Иммунитет цели: ур. <b>{immunity_level}</b>\n\n"
-        "Атаковать?",
+        f"🎯 Цель: <b>{target_display}</b>\n"
+        f"🦠 Вирус цели: ур. <code>{virus_level}</code>\n"
+        f"🛡 Иммунитет цели: ур. <code>{immunity_level}</code>\n\n"
+        "<i>Атаковать?</i>",
         reply_markup=attack_confirm_kb(target.tg_id),
         parse_mode="HTML",
     )
@@ -239,9 +239,9 @@ async def cb_my_infections(callback: CallbackQuery, session: AsyncSession) -> No
 
     text = (
         f"🦠 <b>Мои заражения</b>\n\n"
-        f"Исходящих (жертвы): <b>{out_count}</b>\n"
-        f"Входящих (на мне): <b>{in_count}</b>\n\n"
-        "Выбери категорию:"
+        f"⚔️ Исходящих (жертвы): <code>{out_count}</code>\n"
+        f"🤒 Входящих (на мне): <code>{in_count}</code>\n\n"
+        "<i>Выбери категорию:</i>"
     )
     builder = InlineKeyboardBuilder()
     if out_count:
@@ -298,10 +298,10 @@ async def cb_infections_page(callback: CallbackQuery, session: AsyncSession) -> 
     page_size = 5
     total_pages = max(1, (len(infections) + page_size - 1) // page_size)
 
-    text = f"{title}  (стр. {page + 1}/{total_pages})\n\n"
+    text = f"{title}  (стр. <code>{page + 1}/{total_pages}</code>)\n\n"
 
     if mode == "on":
-        cure_hint = "Нажми на строку заражения чтобы вылечиться."
+        cure_hint = "<i>Нажми на кнопку заражения чтобы вылечиться.</i>"
         text += cure_hint + "\n"
 
     await callback.message.edit_text(

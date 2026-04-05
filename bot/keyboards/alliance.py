@@ -15,7 +15,7 @@ def alliance_no_clan_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="🏰 Создать альянс", callback_data="alliance_create", style=ButtonStyle.PRIMARY)
     builder.button(text="🔍 Найти альянс",   callback_data="alliance_search", style=ButtonStyle.SUCCESS)
-    builder.button(text="◀️ Назад",          callback_data="main_menu")
+    builder.button(text="🔙 Главное меню",    callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -47,11 +47,11 @@ def alliance_info_kb(role: AllianceRole, pending_requests: int = 0) -> InlineKey
         builder.button(text=req_label, callback_data="alliance_requests",                         style=ButtonStyle.PRIMARY)
 
     if role == AllianceRole.LEADER:
-        builder.button(text="⚙️ Приватность",      callback_data="alliance_privacy")
+        builder.button(text="⚙️ Приватность",      callback_data="alliance_privacy",          style=ButtonStyle.PRIMARY)
         builder.button(text="💀 Распустить",        callback_data="alliance_dissolve",        style=ButtonStyle.DANGER)
 
     builder.button(text="🚪 Покинуть",              callback_data="alliance_leave",           style=ButtonStyle.DANGER)
-    builder.button(text="◀️ Назад",                 callback_data="main_menu")
+    builder.button(text="🔙 Главное меню",            callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -66,7 +66,7 @@ def alliance_privacy_kb(current: AlliancePrivacy) -> InlineKeyboardMarkup:
             text=f"{marker}{label}",
             callback_data=f"alliance_set_privacy_{mode.value}",
         )
-    builder.button(text="◀️ Назад", callback_data="alliance_menu")
+    builder.button(text="🔙 Назад", callback_data="alliance_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -79,7 +79,7 @@ def alliance_requests_kb(requests: list[dict]) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
     if not requests:
-        builder.button(text="Нет активных заявок", callback_data="noop")
+        builder.button(text="📭 Нет активных заявок", callback_data="noop", style=ButtonStyle.PRIMARY)
     else:
         for req in requests:
             rid = req["request_id"]
@@ -99,7 +99,7 @@ def alliance_requests_kb(requests: list[dict]) -> InlineKeyboardMarkup:
                 style=ButtonStyle.DANGER,
             )
 
-    builder.button(text="◀️ Назад", callback_data="alliance_menu")
+    builder.button(text="🔙 Назад", callback_data="alliance_menu")
 
     if requests:
         # Group: name button (full row) + two action buttons per request
@@ -170,7 +170,7 @@ def alliance_members_kb(
 
     builder.row(
         *InlineKeyboardBuilder()
-        .button(text="◀️ Назад", callback_data="alliance_menu")
+        .button(text="🔙 Назад", callback_data="alliance_menu")
         .export()[0]
     )
 
@@ -209,6 +209,7 @@ def alliance_member_detail_kb(
             builder.button(
                 text="⬇️ Понизить",
                 callback_data=f"alliance_demote_{target_id}",
+                style=ButtonStyle.DANGER,
             )
         builder.button(
             text="❌ Кикнуть",
@@ -256,9 +257,9 @@ def alliance_search_kb(alliances: list[dict]) -> InlineKeyboardMarkup:
         builder.button(text=label, callback_data=action_cb, style=ButtonStyle.SUCCESS)
 
     if not alliances:
-        builder.button(text="Альянсов не найдено", callback_data="noop")
+        builder.button(text="🔍 Альянсов не найдено", callback_data="noop", style=ButtonStyle.PRIMARY)
 
-    builder.button(text="◀️ Назад", callback_data="alliance_menu")
+    builder.button(text="🔙 Назад", callback_data="alliance_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -267,7 +268,7 @@ def alliance_confirm_dissolve_kb() -> InlineKeyboardMarkup:
     """Confirmation keyboard for dissolving the alliance."""
     builder = InlineKeyboardBuilder()
     builder.button(text="💀 Да, распустить", callback_data="alliance_dissolve_confirm", style=ButtonStyle.DANGER)
-    builder.button(text="❌ Отмена",          callback_data="alliance_menu")
+    builder.button(text="❌ Отмена",          callback_data="alliance_menu",             style=ButtonStyle.PRIMARY)
     builder.adjust(2)
     return builder.as_markup()
 
@@ -276,7 +277,7 @@ def alliance_confirm_leave_kb() -> InlineKeyboardMarkup:
     """Confirmation keyboard for leaving the alliance."""
     builder = InlineKeyboardBuilder()
     builder.button(text="🚪 Да, покинуть", callback_data="alliance_leave_confirm", style=ButtonStyle.DANGER)
-    builder.button(text="❌ Отмена",        callback_data="alliance_menu")
+    builder.button(text="❌ Отмена",        callback_data="alliance_menu",          style=ButtonStyle.PRIMARY)
     builder.adjust(2)
     return builder.as_markup()
 
@@ -312,6 +313,6 @@ def alliance_upgrades_kb(
     if role in (AllianceRole.LEADER, AllianceRole.OFFICER):
         builder.button(text="💎 Купить 🔷 AllianceCoins", callback_data="alliance_buy_coins", style=ButtonStyle.SUCCESS)
 
-    builder.button(text="◀️ Назад", callback_data="alliance_menu")
+    builder.button(text="🔙 Назад", callback_data="alliance_menu")
     builder.adjust(1)
     return builder.as_markup()

@@ -10,8 +10,8 @@ def resources_menu_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     # Mine — SUCCESS
     builder.button(text="⛏ Добыть ресурсы", callback_data="mine", style=ButtonStyle.SUCCESS)
-    # Daily bonus — mono
-    builder.button(text="🎁 Ежедневный бонус", callback_data="daily_bonus")
+    # Daily bonus — SUCCESS
+    builder.button(text="🎁 Ежедневный бонус", callback_data="daily_bonus", style=ButtonStyle.SUCCESS)
     # Convert — PRIMARY
     builder.button(text="💱 Конвертировать 💎 → 🧫", callback_data="convert_premium", style=ButtonStyle.PRIMARY)
     # Back — mono

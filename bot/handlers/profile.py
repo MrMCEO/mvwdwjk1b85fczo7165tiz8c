@@ -88,15 +88,16 @@ def _fmt_profile(data: dict) -> str:
         f"👤 {username_display}",
         status_line,
         "",
-        f"🦠 Вирус: <b>{virus_name}</b> (ур. <b>{virus_level}</b>)",
-        f"🛡 Иммунитет: ур. <b>{immunity_level}</b>",
+        "━━━━━━━━━━━━━━━",
+        f"🦠 Вирус: <b>{virus_name}</b> (ур. <code>{virus_level}</code>)",
+        f"🛡 Иммунитет: ур. <code>{immunity_level}</code>",
         "",
-        f"⚔️ Заражений: <b>{sent}</b> исходящих  │  <b>{received}</b> входящих",
-        f"💰 <b>{u['bio_coins']:,}</b> 🧫 BioCoins",
+        f"⚔️ Заражений: <code>{sent}</code> исходящих  │  <code>{received}</code> входящих",
+        f"💰 <code>{u['bio_coins']:,}</code> 🧫 BioCoins",
     ]
 
     if u.get("premium_coins", 0) > 0:
-        lines.append(f"💎 <b>{u['premium_coins']:,}</b> PremiumCoins")
+        lines.append(f"💎 <code>{u['premium_coins']:,}</code> PremiumCoins")
 
     prefix = u.get("premium_prefix")
     if prefix:
@@ -120,7 +121,7 @@ def _fmt_attack_log_page(entries: list[dict], page: int) -> str:
     if not page_entries:
         return "📋 <b>Лог атак</b>\n\nНа этой странице нет записей."
 
-    lines = [f"📋 <b>Лог атак</b> (стр. {page + 1})\n"]
+    lines = [f"📋 <b>Лог атак</b> (стр. <code>{page + 1}</code>)\n"]
     for e in page_entries:
         direction = "➡️ Атаковал" if e["type"] == "sent" else "⬅️ Атакован"
         opp = f"@{e['opponent_username']}" if e["opponent_username"] else "???"
@@ -128,7 +129,7 @@ def _fmt_attack_log_page(entries: list[dict], page: int) -> str:
         dt = e["started_at"].strftime("%d.%m %H:%M") if e["started_at"] else "—"
         lines.append(
             f"{direction} {opp}\n"
-            f"    📅 {dt} | {status} | 💔 {e['damage_per_tick']:.1f}/тик"
+            f"    📅 <i>{dt}</i> | {status} | 💔 <code>{e['damage_per_tick']:.1f}</code>/тик"
         )
 
     return "\n\n".join(lines)
@@ -145,13 +146,13 @@ def _fmt_transaction_log_page(entries: list[dict], page: int) -> str:
     if not page_entries:
         return "💰 <b>История транзакций</b>\n\nНа этой странице нет записей."
 
-    lines = [f"💰 <b>История транзакций</b> (стр. {page + 1})\n"]
+    lines = [f"💰 <b>История транзакций</b> (стр. <code>{page + 1}</code>)\n"]
     for e in page_entries:
         sign = "+" if e["amount"] >= 0 else ""
         dt = e["created_at"].strftime("%d.%m %H:%M") if e["created_at"] else "—"
         lines.append(
-            f"{e['reason']}\n"
-            f"    {sign}{e['amount']} {e['currency']} | 📅 {dt}"
+            f"📌 {e['reason']}\n"
+            f"    <code>{sign}{e['amount']}</code> {e['currency']} | 📅 <i>{dt}</i>"
         )
 
     return "\n\n".join(lines)

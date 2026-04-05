@@ -11,7 +11,7 @@ def referral_menu_kb(has_claimable: bool) -> InlineKeyboardMarkup:
     if has_claimable:
         builder.button(text="🎁 Забрать награду", callback_data="referral_claim_menu", style=ButtonStyle.SUCCESS)
     builder.button(text="📋 Мои рефералы", callback_data="referral_list", style=ButtonStyle.PRIMARY)
-    builder.button(text="◀️ Назад", callback_data="main_menu")
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -25,7 +25,7 @@ def referral_claim_kb(claimable_levels: list[int]) -> InlineKeyboardMarkup:
             callback_data=f"referral_claim:{level}",
             style=ButtonStyle.SUCCESS,
         )
-    builder.button(text="◀️ Назад", callback_data="referral_menu")
+    builder.button(text="🔙 Назад", callback_data="referral_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -33,6 +33,6 @@ def referral_claim_kb(claimable_levels: list[int]) -> InlineKeyboardMarkup:
 def referral_back_kb() -> InlineKeyboardMarkup:
     """Simple back-to-referral-menu keyboard."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="◀️ Назад", callback_data="referral_menu")
+    builder.button(text="🔙 Назад", callback_data="referral_menu")
     builder.adjust(1)
     return builder.as_markup()

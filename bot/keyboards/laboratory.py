@@ -12,7 +12,7 @@ def lab_menu_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="🔬 Крафт",      callback_data="lab_craft",      style=ButtonStyle.SUCCESS)
     builder.button(text="📦 Инвентарь",  callback_data="lab_inventory",  style=ButtonStyle.PRIMARY)
-    builder.button(text="◀️ Назад",      callback_data="main_menu")
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
     builder.adjust(2, 1)
     return builder.as_markup()
 
@@ -24,7 +24,7 @@ def lab_craft_kb() -> InlineKeyboardMarkup:
         cfg = ITEM_CONFIG[item_type]
         label = f"{cfg['emoji']} {cfg['name']} — {cfg['cost']} 🧫"
         builder.button(text=label, callback_data=f"lab_craft_{item_type.value}", style=ButtonStyle.SUCCESS)
-    builder.button(text="◀️ Назад", callback_data="lab_menu")
+    builder.button(text="🔙 Назад", callback_data="lab_menu")
     # 1 per row so names are readable, back button on its own row
     builder.adjust(*([1] * len(ItemType)), 1)
     return builder.as_markup()
@@ -45,6 +45,6 @@ def lab_inventory_kb(items: list[dict]) -> InlineKeyboardMarkup:
         count_suffix = f" x{item['count']}" if item["count"] > 1 else ""
         label = f"{item['emoji']} {item['name']}{count_suffix} — Использовать"
         builder.button(text=label, callback_data=f"lab_use_{first_id}", style=ButtonStyle.SUCCESS)
-    builder.button(text="◀️ Назад", callback_data="lab_menu")
+    builder.button(text="🔙 Назад", callback_data="lab_menu")
     builder.adjust(*([1] * len(items)), 1)
     return builder.as_markup()

@@ -29,10 +29,11 @@ def _fmt_immunity_stats(data: dict) -> str:
 
     lines = [
         "🛡 <b>Мой иммунитет</b>\n",
-        f"Уровень: <b>{im['level']}</b>",
-        f"Сопротивляемость: <b>{im['resistance']}</b>  │  "
-        f"Детекция: <b>{im['detection_power']:.2f}</b>",
+        f"⭐ Уровень: <code>{im['level']}</code>",
+        f"🔰 Сопротивляемость: <code>{im['resistance']}</code>  │  "
+        f"🔍 Детекция: <code>{im['detection_power']:.2f}</code>",
         "",
+        "━━━━━━━━━━━━━━━",
         "<b>Ветки прокачки:</b>",
     ]
 
@@ -40,11 +41,12 @@ def _fmt_immunity_stats(data: dict) -> str:
     for branch_key, info in upgrades.items():
         icon = icons.get(branch_key, "•")
         next_cost = info.get("next_cost")
-        cost_text = "МАКС" if next_cost is None else f"{next_cost} 🧫"
+        cost_text = "<i>макс.</i>" if next_cost is None else f"<code>{next_cost}</code> 🧫"
         lines.append(
-            f"{icon} {info['name']}: ур. <b>{info['level']}</b>  │  {cost_text}"
+            f"{icon} {info['name']}: ур. <code>{info['level']}</code>  │  {cost_text}"
         )
 
+    lines += ["", "<i>Нажми кнопку ниже для прокачки ветки</i>"]
     return "\n".join(lines)
 
 

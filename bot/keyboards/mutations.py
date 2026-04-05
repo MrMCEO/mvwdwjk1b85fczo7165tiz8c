@@ -81,7 +81,7 @@ def mutations_menu_kb(mutations: list[Mutation]) -> InlineKeyboardMarkup:
                 style=ButtonStyle.SUCCESS,
             )
 
-    builder.button(text="◀️ Назад", callback_data="main_menu")
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
     # One button per row
     builder.adjust(1)
     return builder.as_markup()

@@ -24,18 +24,19 @@ class ShopConvertStates(StatesGroup):
 def _build_shop_text(bio: int, premium: int) -> str:
     lines = [
         "💎 <b>Магазин</b>\n",
-        f"Баланс: <b>{premium:,} 💎</b>  │  <b>{bio:,} 🧫</b>\n",
-        "Курс: 1 💎 = 1₽  │  Конвертация: 1 💎 = "
-        f"{EXCHANGE_RATE} 🧫\n",
+        f"💰 Баланс: <code>{premium:,}</code> 💎  │  <code>{bio:,}</code> 🧫\n",
+        "━━━━━━━━━━━━━━━",
+        f"<i>Курс: 1 💎 = 1₽  │  Конвертация: 1 💎 = {EXCHANGE_RATE} 🧫</i>\n",
         "<b>Пакеты:</b>",
     ]
     for pkg in PACKAGES:
-        bonus_str = f" (+{int(pkg['bonus'] * 100)}% бонус)" if pkg["bonus"] else ""
-        lines.append(f"  💎 {pkg['amount']} — {pkg['price_rub']}₽{bonus_str}")
+        bonus_str = f" <i>(+{int(pkg['bonus'] * 100)}% бонус)</i>" if pkg["bonus"] else ""
+        lines.append(f"  💎 <code>{pkg['amount']}</code> — <code>{pkg['price_rub']}₽</code>{bonus_str}")
     lines += [
         "",
-        "Для покупки 💎 обратитесь к администратору\n"
-        "или используйте промокод: /promo КОД",
+        "━━━━━━━━━━━━━━━",
+        "<i>Для покупки 💎 обратитесь к администратору\n"
+        "или используйте промокод: /promo КОД</i>",
     ]
     return "\n".join(lines)
 
@@ -85,9 +86,10 @@ async def cb_convert_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(ShopConvertStates.waiting_for_amount)
     await callback.message.edit_text(
         f"💱 <b>Конвертация 💎 PremiumCoins → 🧫 BioCoins</b>\n\n"
-        f"Курс: 1 💎 = {EXCHANGE_RATE} 🧫\n\n"
+        f"<i>Курс: <code>1</code> 💎 = <code>{EXCHANGE_RATE}</code> 🧫</i>\n\n"
+        "━━━━━━━━━━━━━━━\n"
         "Введи количество 💎 PremiumCoins для конвертации\n"
-        "или нажми «Назад» для отмены:",
+        "<i>или нажми «Назад» для отмены:</i>",
         reply_markup=back_button("shop_menu"),
         parse_mode="HTML",
     )

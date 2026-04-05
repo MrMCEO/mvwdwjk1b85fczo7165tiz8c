@@ -12,7 +12,7 @@ def profile_kb() -> InlineKeyboardMarkup:
     builder.button(text="📝 Логи атак", callback_data="attack_log:0", style=ButtonStyle.PRIMARY)
     # Row 2: transactions + rename — 2 in a row; transactions PRIMARY
     builder.button(text="📋 Транзакции", callback_data="transaction_log:0", style=ButtonStyle.PRIMARY)
-    builder.button(text="✏️ Имя", callback_data="set_display_name")
+    builder.button(text="✏️ Имя", callback_data="set_display_name", style=ButtonStyle.PRIMARY)
     # Row 3: back — mono
     builder.button(text="🔙 Главное меню", callback_data="main_menu")
     builder.adjust(1, 2, 1)

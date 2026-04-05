@@ -56,7 +56,7 @@ def status_menu_kb(
     if STATUS_CONFIG[current_status]["prefix_length"] > 0:
         builder.button(text="✏️ Установить префикс", callback_data="premium_set_prefix", style=ButtonStyle.PRIMARY)
 
-    builder.button(text="◀️ Назад", callback_data="main_menu")
+    builder.button(text="🔙 Главное меню", callback_data="main_menu")
     builder.adjust(1)
     return builder.as_markup()
 

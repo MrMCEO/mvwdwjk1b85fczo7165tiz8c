@@ -20,7 +20,7 @@ def market_menu_kb() -> InlineKeyboardMarkup:
     builder.button(text="🎯 Контракты",          callback_data="market_contracts",     style=ButtonStyle.PRIMARY)
     builder.button(text="📋 Все лоты",           callback_data="market_listings",      style=ButtonStyle.PRIMARY)
     builder.button(text="🗂 Мои лоты",           callback_data="market_my",            style=ButtonStyle.PRIMARY)
-    builder.button(text="◀️ Назад",              callback_data="main_menu")
+    builder.button(text="🔙 Главное меню",        callback_data="main_menu")
     builder.adjust(2, 1, 2, 1)
     return builder.as_markup()
 
@@ -55,7 +55,7 @@ def market_listings_kb(listings: list[dict], page: int = 0) -> InlineKeyboardMar
         builder.button(text="След. ▶️", callback_data=f"market_listings_pg_{page + 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
 
-    builder.button(text="◀️ Назад", callback_data="market_menu")
+    builder.button(text="🔙 Назад", callback_data="market_menu")
 
     row_sizes = [1] * len(page_items)
     if nav_buttons:
@@ -114,7 +114,7 @@ def market_listing_detail_kb(listing: dict, is_owner: bool) -> InlineKeyboardMar
         elif ltype == ListingType.HIT_CONTRACT:
             builder.button(text="🔫 Взять контракт", callback_data=f"market_claim_{lid}", style=ButtonStyle.SUCCESS)
 
-    builder.button(text="◀️ Назад", callback_data="market_menu")
+    builder.button(text="🔙 Назад", callback_data="market_menu")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -147,7 +147,7 @@ def market_my_kb(listings: list[dict]) -> InlineKeyboardMarkup:
         else:
             builder.button(text=label, callback_data="market_my_noop")
 
-    builder.button(text="◀️ Назад", callback_data="market_menu")
+    builder.button(text="🔙 Назад", callback_data="market_menu")
     builder.adjust(*([1] * min(len(listings), 15)), 1)
     return builder.as_markup()
 
@@ -175,7 +175,7 @@ def market_inventory_items_kb(items: list[dict], page: int = 0) -> InlineKeyboar
         builder.button(text="След. ▶️", callback_data=f"market_inv_pg_{page + 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
 
-    builder.button(text="◀️ Назад", callback_data="market_menu")
+    builder.button(text="🔙 Назад", callback_data="market_menu")
 
     row_sizes = [1] * len(page_items)
     if nav_buttons:
@@ -211,7 +211,7 @@ def market_inventory_mutations_kb(
         builder.button(text="След. ▶️", callback_data=f"market_mut_pg_{page + 1}", style=ButtonStyle.PRIMARY)
         nav_buttons += 1
 
-    builder.button(text="◀️ Назад", callback_data="market_menu")
+    builder.button(text="🔙 Назад", callback_data="market_menu")
 
     row_sizes = [1] * len(page_items)
     if nav_buttons:

@@ -126,6 +126,7 @@ def _fmt_alliance_info(info: dict) -> str:
         lines.append("")
 
     lines += [
+        "━━━━━━━━━━━━━━━",
         "👤 <b>Участники и управление</b>",
         f"  👑 Лидер: <code>{info['leader_username']}</code>",
         f"  👥 Состав: <code>{info['member_count']}/{info['max_members']}</code>",
@@ -837,7 +838,8 @@ def _fmt_upgrades_text(info: dict, upgrades: dict) -> str:
     """Format the upgrades screen text."""
     lines = [
         f"🏰 <b>Улучшения альянса [{escape(info['tag'])}]</b>",
-        f"🔷 Баланс: <b>{info['alliance_coins']} AllianceCoins</b>",
+        f"🔷 Баланс: <code>{info['alliance_coins']}</code> AllianceCoins",
+        "━━━━━━━━━━━━━━━",
         "",
     ]
 
@@ -855,11 +857,13 @@ def _fmt_upgrades_text(info: dict, upgrades: dict) -> str:
             effect_str = f"+{effect * 100:.0f}%"
 
         if level >= data["max_level"]:
-            lines.append(f"{cfg['emoji']} {cfg['name']}: ур. {level} ({effect_str}) — МАКС")
+            lines.append(
+                f"{cfg['emoji']} {cfg['name']}: ур. <code>{level}</code> ({effect_str}) — <i>макс.</i>"
+            )
         else:
             lines.append(
-                f"{cfg['emoji']} {cfg['name']}: ур. {level} ({effect_str}) "
-                f"→ ур. {level + 1} стоит {next_cost} 🔷"
+                f"{cfg['emoji']} {cfg['name']}: ур. <code>{level}</code> ({effect_str}) "
+                f"→ ур. <code>{level + 1}</code> стоит <code>{next_cost}</code> 🔷"
             )
 
     return "\n".join(lines)
@@ -1003,12 +1007,13 @@ async def cb_alliance_donate(
     await state.set_state(AllianceDonateStates.waiting_for_amount)
     await callback.message.edit_text(
         "💰 <b>Пожертвование в казну альянса</b>\n\n"
-        f"Курс конвертации: <b>{BIO_TO_ALLIANCE_RATE} 🧫 = 1 🔷</b>\n"
-        f"Минимальный взнос: <b>{TREASURY_MIN_DONATION} 🧫</b>\n\n"
-        f"Твой баланс: <b>{bio} 🧫</b>\n"
-        f"Казна альянса: <b>{info['treasury_bio']} 🧫</b>\n\n"
-        "Введи сумму пожертвования (🧫 BioCoins):\n\n"
-        "Или нажми «Назад» для отмены.",
+        f"💱 Курс конвертации: <code>{BIO_TO_ALLIANCE_RATE}</code> 🧫 = <code>1</code> 🔷\n"
+        f"⚠️ Минимальный взнос: <code>{TREASURY_MIN_DONATION}</code> 🧫\n\n"
+        "━━━━━━━━━━━━━━━\n"
+        f"💰 Твой баланс: <code>{bio:,}</code> 🧫\n"
+        f"🏦 Казна альянса: <code>{info['treasury_bio']:,}</code> 🧫\n\n"
+        "<i>Введи сумму пожертвования (🧫 BioCoins):</i>\n\n"
+        "<i>Или нажми «Назад» для отмены.</i>",
         reply_markup=back_button("alliance_menu"),
         parse_mode="HTML",
     )

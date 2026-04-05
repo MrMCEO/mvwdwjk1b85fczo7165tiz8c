@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.models.immunity import Immunity
 from bot.models.resource import (
     Currency as CurrencyType,
 )
@@ -27,6 +28,7 @@ from bot.models.resource import (
     TransactionReason,
 )
 from bot.models.user import User
+from bot.models.virus import Virus
 from bot.services.alliance import get_alliance_mining_bonus
 from bot.services.event import get_event_modifier
 from bot.services.mutation_effects import apply_mutation_to_mining
@@ -55,6 +57,29 @@ async def _get_user(session: AsyncSession, user_id: int) -> User | None:
         select(User).where(User.tg_id == user_id).with_for_update()
     )
     return result.scalar_one_or_none()
+
+
+async def _get_total_level(session: AsyncSession, user_id: int) -> int:
+    """Return sum of all virus branch levels + all immunity branch levels for *user_id*."""
+    from sqlalchemy.orm import selectinload
+
+    virus_result = await session.execute(
+        select(Virus).where(Virus.owner_id == user_id).options(
+            selectinload(Virus.upgrades)
+        )
+    )
+    virus = virus_result.scalar_one_or_none()
+    virus_total = sum(u.level for u in virus.upgrades) if virus else 0
+
+    immunity_result = await session.execute(
+        select(Immunity).where(Immunity.owner_id == user_id).options(
+            selectinload(Immunity.upgrades)
+        )
+    )
+    immunity = immunity_result.scalar_one_or_none()
+    immunity_total = sum(u.level for u in immunity.upgrades) if immunity else 0
+
+    return virus_total + immunity_total
 
 
 async def _last_transaction(
@@ -125,9 +150,12 @@ async def mine_resources(
                 f"Добыча уже идёт. Следующая добыча через {_fmt_cooldown(seconds)}."
             )
 
-    # --- Mine ---
+    # --- Mine (scalable formula) ---
+    total_level = await _get_total_level(session, user_id)
+    base_reward = 50 + total_level * 10
+
     multiplier = await get_mining_multiplier(session, user_id)
-    amount = int(random.randint(MINING_MIN, MINING_MAX) * multiplier)
+    amount = int(base_reward * multiplier)
 
     # Event modifier (Gold Rush = x2)
     mining_event_mult = await get_event_modifier(session, "mining_mult")
@@ -209,7 +237,11 @@ async def claim_daily_bonus(
     new_streak = min(new_streak, DAILY_STREAK_MAX)
     streak_multiplier = 1.0 + DAILY_STREAK_BONUS * (new_streak - 1)
     premium_multiplier = await get_daily_multiplier(session, user_id)
-    amount = int(DAILY_BASE * streak_multiplier * premium_multiplier)
+
+    # Scalable daily reward based on total upgrade level
+    total_level = await _get_total_level(session, user_id)
+    daily_base = 200 + total_level * 20
+    amount = int(daily_base * streak_multiplier * premium_multiplier)
 
     # Event modifier (Gold Rush also boosts daily bonus)
     mining_event_mult = await get_event_modifier(session, "mining_mult")

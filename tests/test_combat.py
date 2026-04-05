@@ -2,7 +2,7 @@
 Unit tests for bot/services/combat.py
 """
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 import pytest
 from sqlalchemy import select

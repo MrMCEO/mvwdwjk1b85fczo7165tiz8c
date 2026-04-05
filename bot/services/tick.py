@@ -27,12 +27,12 @@ from sqlalchemy.orm import selectinload
 from html import escape
 
 from bot.models.base import AsyncSessionFactory
-from bot.models.immunity import Immunity, ImmunityBranch
+from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade
 from bot.models.infection import Infection
 from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
-from bot.models.virus import Virus
+from bot.models.virus import Virus, VirusUpgrade
 from bot.services.alliance import get_alliance_regen_bonus
 from bot.services.event import expire_events
 from bot.services.notifications import should_notify
@@ -93,7 +93,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
     notifications: list[dict] = []
 
     # Load all active infections (with attacker/victim users, victim immunity + upgrades,
-    # and attacker's virus for name display in notifications)
+    # victim virus + upgrades for total_level, and attacker's virus for name display)
     result = await session.execute(
         select(Infection)
         .where(Infection.is_active == True)  # noqa: E712
@@ -102,6 +102,9 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
             selectinload(Infection.victim)
             .selectinload(User.immunity)
             .selectinload(Immunity.upgrades),  # needed for REGENERATION effect
+            selectinload(Infection.victim)
+            .selectinload(User.virus)
+            .selectinload(Virus.upgrades),  # needed for drain total_level calculation
         )
     )
     infections: list[Infection] = list(result.scalars().all())
@@ -116,26 +119,44 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
         victim: User = inf.victim
         attacker: User = inf.attacker
 
-        # --- Drain bio_coins from victim ---
-        # Use round() to avoid permanently discarding fractional damage each tick.
-        drain = min(round(inf.damage_per_tick), victim.bio_coins)  # cannot go below 0
-        if drain < 0:
-            drain = 0
+        # --- Compute scalable drain ---
+        # victim_total_level = sum of all virus branch levels + all immunity branch levels
+        victim_virus = getattr(victim, "virus", None)
+        victim_virus_level = (
+            sum(u.level for u in victim_virus.upgrades)
+            if victim_virus is not None and victim_virus.upgrades
+            else 0
+        )
+        victim_immunity = victim.immunity
+        victim_immunity_level = (
+            sum(u.level for u in victim_immunity.upgrades)
+            if victim_immunity is not None and victim_immunity.upgrades
+            else 0
+        )
+        victim_total_level = victim_virus_level + victim_immunity_level
+        drain = max(10, victim_total_level * 3)
 
-        if drain > 0:
-            victim.bio_coins -= drain
+        # Minimum balance the victim can reach: -(total_level * 500)
+        victim_min_balance = -(victim_total_level * 500)
+        new_balance = max(victim_min_balance, victim.bio_coins - drain)
+        actual_drain = victim.bio_coins - new_balance  # may be < drain if near min_balance
+        if actual_drain <= 0:
+            actual_drain = 0
+
+        if actual_drain > 0:
+            victim.bio_coins = new_balance
 
             # Record loss for victim
             loss_tx = ResourceTransaction(
                 user_id=victim.tg_id,
-                amount=-drain,
+                amount=-actual_drain,
                 currency=CurrencyType.BIO_COINS,
                 reason=TransactionReason.INFECTION_LOSS,
             )
             session.add(loss_tx)
 
-            # Attacker receives 70%
-            attacker_gain = int(drain * ATTACKER_SHARE)
+            # Attacker receives ATTACKER_SHARE of actual drained amount
+            attacker_gain = int(actual_drain * ATTACKER_SHARE)
             if attacker_gain > 0:
                 attacker.bio_coins += attacker_gain
 
@@ -165,10 +186,10 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
             ):
                 drain_msg = (
                     f"🦠 Вирус «{escape(attacker_virus.name)}» "
-                    f"забрал у вас {drain} 🧫 BioCoins"
+                    f"забрал у вас {actual_drain} 🧫 BioCoins"
                 )
             else:
-                drain_msg = f"🦠 Заражение забрало у вас {drain} 🧫 BioCoins"
+                drain_msg = f"🦠 Заражение забрало у вас {actual_drain} 🧫 BioCoins"
 
             notifications.append({
                 "user_id": victim.tg_id,

@@ -172,6 +172,10 @@ async def attack_player(
     if victim is None:
         return False, "Жертва не найдена.", None
 
+    # --- Newbie protection: 24 hours after account creation ---
+    if victim.created_at and (_now_utc() - victim.created_at) < timedelta(hours=24):
+        return False, "🛡 Этот игрок под защитой новичка (24 часа).", None
+
     # --- Cooldown: look at last infection this attacker has sent (any victim) ---
     attack_cooldown = await get_attack_cooldown(session, attacker_id)
     last_attack_result = await session.execute(
@@ -217,77 +221,64 @@ async def attack_player(
     if immunity is None:
         return False, "У жертвы ещё нет иммунитета.", None
 
-    # --- Attack score ---
-    # Base: attack_power (default 10). spread_rate is now a direct multiplier (default 1.0).
-    # Formula: attack_power * spread_rate * (1 + contagion_bonus)
-    attack_score: float = virus.attack_power * virus.spread_rate
+    # --- Compute total levels for new formulas ---
+    # virus_level = sum of all virus branch levels
+    virus_level: int = sum(u.level for u in virus.upgrades)
+    # immunity_level = sum of all immunity branch levels
+    immunity_level: int = sum(u.level for u in immunity.upgrades)
 
-    # CONTAGION bonus: multiplies attack score (+8% per level)
-    contagion_effect = _upgrade_effect(virus_upgrades, VirusBranch.CONTAGION)
-    attack_score *= 1.0 + contagion_effect
-
-    # STEALTH reduces victim's effective detection_power
+    # --- STEALTH for detection notification logic ---
     stealth_effect = _upgrade_effect(virus_upgrades, VirusBranch.STEALTH)
-
-    # --- Defense score ---
-    # Base: resistance (default 10). BARRIER adds flat defense (not multiplicative!).
-    # Old formula resistance * (1 + barrier) was exponentially broken at high levels.
-    barrier_effect = _upgrade_effect(immunity_upgrades, ImmunityBranch.BARRIER)
-    defense_score: float = immunity.resistance + barrier_effect  # balanced: additive, not multiplicative
-
-    # Detection adds direct bonus to defense when attacker is not fully stealthed.
-    # Scaled by 5.0 so detection upgrades (+0.05/lvl) are meaningful: lvl10 = +2.5 defense.
     detection_effect = _upgrade_effect(immunity_upgrades, ImmunityBranch.DETECTION)
     effective_detection = max(0.0, (immunity.detection_power + detection_effect) - stealth_effect)
-    defense_score += effective_detection * 5.0  # balanced: detection matters but not dominant
 
     # --- Event modifiers ---
     can_attack = await get_event_modifier(session, "can_attack")
     if not can_attack:
         return False, "Сейчас действует перемирие (🕊 Ceasefire). Атаки запрещены.", None
 
-    attack_chance_mult = await get_event_modifier(session, "attack_chance_mult")
-    attack_score *= attack_chance_mult
+    attack_chance_event_mult = await get_event_modifier(session, "attack_chance_mult")
 
-    defense_mult = await get_event_modifier(session, "defense_mult")
-    defense_score *= defense_mult
-
-    # --- Mutation modifiers (attacker) ---
+    # --- Mutation modifiers ---
     atk_mods = await apply_mutation_to_attack(session, attacker_id)
-    attack_score *= atk_mods.get("attack_mult", 1.0)
-    attack_score *= atk_mods.get("spread_mult", 1.0)
-
-    # --- Mutation modifiers (defender) ---
     def_mods = await apply_mutation_to_defense(session, victim_id)
-    defense_score *= def_mods.get("defense_mult", 1.0)
 
     if def_mods.get("absolute_immunity"):
         return False, "Цель под защитой Абсолютного иммунитета! Атака невозможна.", None
 
     # --- Alliance bonuses ---
     atk_alliance_bonus = await get_alliance_attack_bonus(session, attacker_id)
-    attack_score *= (1.0 + atk_alliance_bonus)
-
     def_alliance_bonus = await get_alliance_defense_bonus(session, victim_id)
-    defense_score *= (1.0 + def_alliance_bonus)
 
     # --- Laboratory item effects ---
     has_bio_bomb = await get_active_item_effect(session, attacker_id, ItemType.BIO_BOMB)
     has_enhancer = await get_active_item_effect(session, attacker_id, ItemType.VIRUS_ENHANCER)
-    has_cloak = await get_active_item_effect(session, attacker_id, ItemType.STEALTH_CLOAK)  # noqa: F841 (reserved for future use)
+    has_cloak = await get_active_item_effect(session, attacker_id, ItemType.STEALTH_CLOAK)  # noqa: F841
     has_shield = await get_active_item_effect(session, victim_id, ItemType.SHIELD_BOOST)
 
-    if has_shield:
-        defense_score *= 1.5
-
-    # --- Infection probability ---
-    # With defaults: attack=10, defense=10+(0.1*5)=10.5, chance=10/20.5=48.8% — close to target 45%
-    total = attack_score + defense_score
+    # --- Infection probability (new diff-based formula) ---
+    # Base: 50% ± 0.7% per level difference. Clamped 3%–97%.
     if has_bio_bomb:
-        chance: float = 0.95  # near-guaranteed attack (leave 5% for the unexpected)
+        chance: float = 0.97  # near-guaranteed attack (leave 3% for the unexpected)
     else:
-        chance = attack_score / total if total > 0 else 0.0
-        chance = max(0.05, min(0.95, chance))  # floor 5%, cap 95% — always a small chance either way
+        diff = virus_level - immunity_level
+        chance = 0.50 + diff * 0.007
+        chance = max(0.03, min(0.97, chance))
+
+        # Apply event multiplier (additive cap to avoid exceeding 0.97)
+        if attack_chance_event_mult != 1.0:
+            chance = min(0.97, chance * attack_chance_event_mult)
+
+        # Mutations: additive bonus to base chance
+        chance += atk_mods.get("chance_bonus", 0.0)
+        chance -= def_mods.get("chance_penalty", 0.0) * def_alliance_bonus  # alliance reduces attacker chance
+        # Alliance attack bonus: small additive bump
+        chance += atk_alliance_bonus * 0.05
+        # Shield item reduces attacker chance by 10%
+        if has_shield:
+            chance -= 0.10
+        # Re-clamp after all modifiers
+        chance = max(0.03, min(0.97, chance))
 
     roll = random.random()
     success = roll < chance
@@ -307,14 +298,40 @@ async def attack_player(
             f"Иммунитет жертвы устоял."
         ), None
 
+    # --- Risk-based reward for attacker ---
+    avg_level = (virus_level + immunity_level) / 2
+    risk_multiplier = 1 + (immunity_level - virus_level) / 50
+    risk_multiplier = max(0.1, min(5.0, risk_multiplier))
+    reward = int(avg_level * 50 * risk_multiplier)
+    reward = max(10, reward)
+
+    # Attacker receives reward
+    attacker.bio_coins += reward
+
+    # Victim loses same amount (but not below their minimum balance)
+    victim_total_level = immunity_level  # victim's defence levels
+    victim_min_balance = -(victim_total_level * 500)
+    victim.bio_coins = max(victim_min_balance, victim.bio_coins - reward)
+
+    # Record transactions
+    reward_tx = ResourceTransaction(
+        user_id=attacker_id,
+        amount=reward,
+        currency=CurrencyType.BIO_COINS,
+        reason=TransactionReason.INFECTION_INCOME,
+    )
+    session.add(reward_tx)
+    loss_tx = ResourceTransaction(
+        user_id=victim_id,
+        amount=-reward,
+        currency=CurrencyType.BIO_COINS,
+        reason=TransactionReason.INFECTION_LOSS,
+    )
+    session.add(loss_tx)
+
     # --- Calculate damage_per_tick ---
     # Lethality increases base damage (+2.0 per level; lvl10 = 25 total)
     lethality_effect = _upgrade_effect(virus_upgrades, VirusBranch.LETHALITY)
-    # Regeneration no longer reduces damage here — it boosts auto-cure chance in tick.py.
-    # This makes REGEN and BARRIER serve different roles:
-    #   BARRIER = reduce chance of getting infected (prevention)
-    #   REGEN   = recover faster once infected (cure speed)
-
     damage_per_tick = max(1.0, BASE_DAMAGE_PER_TICK + lethality_effect)
 
     # Virus Enhancer item: double damage for this attack
@@ -361,18 +378,25 @@ async def attack_player(
         victim_notification: dict = {
             "user_id": victim_id,
             "notify_type": "attacks",
-            "message": f"⚠️ Вас заразил{virus_display} игрок @{attacker_display}!",
+            "message": (
+                f"⚠️ Вас заразил{virus_display} игрок @{attacker_display}! "
+                f"Потеряно {reward} 🧫 BioCoins."
+            ),
         }
     else:
         victim_notification = {
             "user_id": victim_id,
             "notify_type": "attacks",
-            "message": f"⚠️ Вас заразили{virus_display}! Атакующий неизвестен.",
+            "message": (
+                f"⚠️ Вас заразили{virus_display}! Атакующий неизвестен. "
+                f"Потеряно {reward} 🧫 BioCoins."
+            ),
         }
 
     return True, (
         f"✅ Атака{virus_display} на @{victim_display} успешна! "
-        f"Шанс был {chance * 100:.1f}%, урон в тик: {damage_per_tick:.1f} 🧫 BioCoins."
+        f"Шанс был {chance * 100:.1f}%, урон в тик: {damage_per_tick:.1f} 🧫 BioCoins. "
+        f"Получено {reward} 🧫 BioCoins."
     ), victim_notification
 
 

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
-        CheckConstraint("bio_coins >= 0", name="ck_users_bio_coins_non_negative"),
+        # bio_coins can go negative (debt mechanic) — only premium_coins is non-negative
         CheckConstraint("premium_coins >= 0", name="ck_users_premium_coins_non_negative"),
     )
 

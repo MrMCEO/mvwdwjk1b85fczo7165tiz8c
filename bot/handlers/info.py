@@ -7,7 +7,7 @@ from bot.utils.chat import smart_reply
 
 router = Router(name="info")
 
-GUIDE_URL = "https://telegra.ph/BioWars--Polnyj-gajd-po-igre-04-04-4"
+GUIDE_URL = "https://telegra.ph/BioWars--Polnyj-gajd-po-igre-04-05"
 
 INFO_TEXT = (
     "🧬 <b>BioWars — Справка</b>\n"

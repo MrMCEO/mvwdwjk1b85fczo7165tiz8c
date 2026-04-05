@@ -82,6 +82,7 @@ class PandemicParticipant(Base):
         ForeignKey("users.tg_id", ondelete="CASCADE"),
     )
     damage_dealt: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    attack_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_attack_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), server_default=func.now()

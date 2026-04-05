@@ -341,8 +341,13 @@ async def attack_boss(
     Returns (damage_dealt, message).
     damage_dealt is 0 on failure.
 
-    Attack power = virus.attack_power * (1 + sum of all virus upgrade levels)
-    Cooldown: 30 minutes between attacks.
+    Damage formula:
+      base = virus.attack_power * (1 + sum of upgrade levels)
+      ±20% random variance
+      10% crit chance → ×2
+      streak bonus: +5% per previous attack (max +50%)
+
+    Cooldown: dynamic — 10 min for level 1, up to 30 min for level 50+.
     If total damage >= boss_hp → event ends and rewards are distributed.
     """
     # Load event
@@ -359,19 +364,7 @@ async def attack_boss(
     # Get or create participant row (with row lock)
     participant = await _get_or_create_participant(session, event_id, user_id)
 
-    # Cooldown check
-    if participant.last_attack_at is not None:
-        elapsed = now - participant.last_attack_at
-        if elapsed < BOSS_ATTACK_COOLDOWN:
-            remaining = BOSS_ATTACK_COOLDOWN - elapsed
-            minutes = int(remaining.total_seconds() // 60)
-            seconds = int(remaining.total_seconds() % 60)
-            return 0, (
-                f"Кулдаун атаки на босса ещё не истёк. "
-                f"Следующая атака через {minutes}м {seconds}с."
-            )
-
-    # Load attacker's virus with upgrades
+    # Load attacker's virus with upgrades (needed for cooldown too)
     virus_result = await session.execute(
         select(Virus)
         .where(Virus.owner_id == user_id)
@@ -381,13 +374,45 @@ async def attack_boss(
     if virus is None:
         return 0, "У тебя ещё нет вируса. Создай профиль через /start."
 
-    # Calculate damage
     upgrade_level_sum = sum(u.level for u in virus.upgrades)
-    damage = int(virus.attack_power * (1 + upgrade_level_sum))
-    damage = max(1, damage)  # at least 1 damage
 
-    # Apply damage
+    # Dynamic cooldown: 10 min for weak players, up to 30 min for strong ones
+    cooldown_minutes = min(30, max(10, upgrade_level_sum * 0.6))
+    boss_cooldown = timedelta(minutes=cooldown_minutes)
+
+    # Cooldown check
+    if participant.last_attack_at is not None:
+        elapsed = now - participant.last_attack_at
+        if elapsed < boss_cooldown:
+            remaining = boss_cooldown - elapsed
+            rem_minutes = int(remaining.total_seconds() // 60)
+            rem_seconds = int(remaining.total_seconds() % 60)
+            return 0, (
+                f"Кулдаун атаки на босса ещё не истёк. "
+                f"Следующая атака через {rem_minutes}м {rem_seconds}с."
+            )
+
+    # --- Damage calculation ---
+
+    # Base damage with ±20% random variance
+    base_damage = int(virus.attack_power * (1 + upgrade_level_sum))
+    damage = int(base_damage * random.uniform(0.8, 1.2))
+    damage = max(1, damage)
+
+    # Critical hit: 10% chance × 2
+    is_crit = random.random() < 0.10
+    if is_crit:
+        damage *= 2
+
+    # Streak bonus: +5% per previous attack (max +50%)
+    streak_count = participant.attack_count  # attacks already done before this one
+    streak_bonus = min(0.50, streak_count * 0.05)
+    damage = int(damage * (1 + streak_bonus))
+    damage = max(1, damage)
+
+    # Apply damage and update counters
     participant.damage_dealt += damage
+    participant.attack_count += 1
     participant.last_attack_at = now
     await session.flush()
 
@@ -395,21 +420,37 @@ async def attack_boss(
     boss_hp = _parse_boss_hp(event)
     total_damage = await _total_damage_dealt(session, event_id)
 
+    # Build extra info lines for the message
+    crit_line = "🎯 <b>Критический удар!</b>\n" if is_crit else ""
+    streak_pct = int(streak_bonus * 100)
+    streak_line = (
+        f"🔥 Серия атак: ×{participant.attack_count} (+{streak_pct}%)\n"
+        if streak_count > 0
+        else ""
+    )
+    cooldown_line = f"⏱ Следующая атака через {int(cooldown_minutes)} мин\n"
+
     if total_damage >= boss_hp:
         event.is_active = False
         await session.flush()
         await distribute_pandemic_rewards(session, event_id)
         return damage, (
-            f"Ты нанёс {damage} урона боссу! "
-            f"Босс повержён! Суммарный урон: {total_damage:,}/{boss_hp:,}.\n"
+            f"💥 Ты нанёс <b>{damage}</b> урона боссу!\n"
+            f"{crit_line}"
+            f"{streak_line}"
+            f"Босс повержён! 🎉\n"
+            f"📊 Суммарный урон: {total_damage:,}/{boss_hp:,}\n"
             f"Награды розданы всем участникам!"
         )
 
     remaining_hp = boss_hp - total_damage
     return damage, (
-        f"Ты нанёс <b>{damage}</b> урона боссу!\n"
-        f"Суммарный урон: <b>{total_damage:,}/{boss_hp:,}</b>\n"
-        f"Осталось HP боссу: <b>{remaining_hp:,}</b>"
+        f"💥 Ты нанёс <b>{damage}</b> урона боссу!\n"
+        f"{crit_line}"
+        f"{streak_line}"
+        f"{cooldown_line}"
+        f"📊 Суммарный урон: {total_damage:,}/{boss_hp:,}\n"
+        f"❤️ Осталось HP: <b>{remaining_hp:,}</b>"
     )
 
 

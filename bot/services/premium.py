@@ -503,6 +503,14 @@ async def set_prefix(
     # The User.premium_prefix column is String(30) to accommodate this.
     if len(safe) > 30:
         return False, "❌ Префикс содержит слишком много специальных символов."
+
+    # Uniqueness check — no two players can have the same prefix
+    existing = await session.execute(
+        select(User.tg_id).where(User.premium_prefix == safe, User.tg_id != user_id)
+    )
+    if existing.scalar_one_or_none() is not None:
+        return False, "❌ Этот префикс уже занят другим игроком."
+
     user.premium_prefix = safe
     await session.flush()
     return True, f"✅ Префикс установлен: [{safe}]"

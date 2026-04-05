@@ -16,6 +16,7 @@ from bot.keyboards.profile import log_pagination_kb, profile_kb
 from bot.services.activity import get_attack_log, get_transaction_log
 from bot.services.player import get_player_profile
 from bot.services.premium import clear_display_name, format_username, set_display_name
+from bot.utils.chat import smart_reply
 from bot.utils.emoji import render_virus_name
 
 
@@ -267,15 +268,12 @@ async def msg_display_name_input(
     # Отмена
     if text.lower() in ("/cancel", "отмена"):
         await state.clear()
-        await message.answer(
-            "❌ Изменение имени отменено.",
-            parse_mode="HTML",
-        )
+        await smart_reply(message, "❌ Изменение имени отменено.")
         return
 
     ok, msg = await set_display_name(session, message.from_user.id, text)
     await state.clear()
-    await message.answer(msg, parse_mode="HTML")
+    await smart_reply(message, msg)
 
 
 @router.callback_query(lambda c: c.data == "clear_display_name")

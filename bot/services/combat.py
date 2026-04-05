@@ -376,6 +376,43 @@ async def attack_player(
     ), victim_notification
 
 
+async def get_random_target(session: AsyncSession, attacker_id: int) -> User | None:
+    """Choose a random player to attack.
+
+    Excludes:
+    - the attacker themselves
+    - players already actively infected by this attacker
+    """
+    # Subquery: victim_ids already infected by attacker (active infections only)
+    already_infected_sq = (
+        select(Infection.victim_id)
+        .where(
+            and_(
+                Infection.attacker_id == attacker_id,
+                Infection.is_active == True,  # noqa: E712
+            )
+        )
+        .scalar_subquery()
+    )
+
+    result = await session.execute(
+        select(User)
+        .where(
+            and_(
+                User.tg_id != attacker_id,
+                User.tg_id.not_in(already_infected_sq),
+            )
+        )
+        .options(
+            selectinload(User.virus),
+            selectinload(User.immunity),
+        )
+        .order_by(func.random())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_active_infections_by(
     session: AsyncSession,
     user_id: int,

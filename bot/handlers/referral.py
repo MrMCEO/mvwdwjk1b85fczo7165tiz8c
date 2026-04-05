@@ -25,6 +25,7 @@ from bot.services.referral import (
     get_referral_link,
     get_referral_stats,
 )
+from bot.utils.chat import smart_reply
 
 router = Router(name="referral")
 
@@ -117,10 +118,10 @@ async def cmd_ref(message: Message, session: AsyncSession) -> None:
     stats = await get_referral_stats(session, user_id)
     has_claimable = any(r["is_available"] for r in stats["rewards"])
     text = _fmt_referral_menu(stats, link)
-    await message.answer(
+    await smart_reply(
+        message,
         text,
         reply_markup=referral_menu_kb(has_claimable),
-        parse_mode="HTML",
     )
 
 

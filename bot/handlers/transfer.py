@@ -26,6 +26,7 @@ from bot.services.transfer import (
     get_transfer_limit,
     transfer_coins,
 )
+from bot.utils.chat import smart_reply
 
 router = Router(name="transfer")
 
@@ -112,7 +113,8 @@ async def msg_transfer_username(
     raw = (message.text or "").strip().lstrip("@")
 
     if not raw:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Пустой username. Попробуй ещё раз:",
             reply_markup=transfer_back_kb(),
         )
@@ -125,16 +127,17 @@ async def msg_transfer_username(
     target = result.scalar_one_or_none()
 
     if target is None:
-        await message.answer(
+        await smart_reply(
+            message,
             f"❌ Игрок <b>@{escape(raw)}</b> не найден в игре.\n"
             "Проверь username и попробуй снова:",
             reply_markup=transfer_back_kb(),
-            parse_mode="HTML",
         )
         return
 
     if target.tg_id == message.from_user.id:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Нельзя переводить монеты самому себе.",
             reply_markup=transfer_back_kb(),
         )
@@ -151,7 +154,8 @@ async def msg_transfer_username(
     bio_balance = balance.get("bio_coins", 0) if balance else 0
     commission_pct = int(TRANSFER_COMMISSION * 100)
 
-    await message.answer(
+    await smart_reply(
+        message,
         f"✅ Получатель: <b>@{escape(raw)}</b>\n\n"
         f"Твой баланс: <b>{bio_balance} 🧫</b>\n"
         f"Доступный лимит: <b>{remaining} 🧫</b> из <b>{daily_limit}</b>\n"
@@ -159,7 +163,6 @@ async def msg_transfer_username(
         "Введи сумму перевода (целое число 🧫):\n\n"
         "Или нажми «Назад» для отмены.",
         reply_markup=transfer_back_kb(),
-        parse_mode="HTML",
     )
 
 
@@ -173,14 +176,16 @@ async def msg_transfer_amount(
     try:
         amount = int(raw)
     except ValueError:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Введи целое число. Попробуй ещё раз:",
             reply_markup=transfer_back_kb(),
         )
         return
 
     if amount <= 0:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Сумма должна быть больше нуля. Попробуй ещё раз:",
             reply_markup=transfer_back_kb(),
         )
@@ -189,7 +194,8 @@ async def msg_transfer_amount(
     # Guard against absurdly large inputs (well above any realistic balance)
     MAX_TRANSFER_INPUT = 10_000_000
     if amount > MAX_TRANSFER_INPUT:
-        await message.answer(
+        await smart_reply(
+            message,
             f"❌ Слишком большая сумма. Максимум: {MAX_TRANSFER_INPUT:,} 🧫",
             reply_markup=transfer_back_kb(),
         )
@@ -204,12 +210,12 @@ async def msg_transfer_amount(
     remaining = max(0, daily_limit - daily_used)
 
     if amount > remaining:
-        await message.answer(
+        await smart_reply(
+            message,
             f"❌ Превышен дневной лимит.\n"
             f"Доступно: <b>{remaining} 🧫</b> из <b>{daily_limit}</b>\n\n"
             "Введи другую сумму:",
             reply_markup=transfer_back_kb(),
-            parse_mode="HTML",
         )
         return
 
@@ -217,12 +223,12 @@ async def msg_transfer_amount(
     bio_balance = balance.get("bio_coins", 0) if balance else 0
 
     if amount > bio_balance:
-        await message.answer(
+        await smart_reply(
+            message,
             f"❌ Недостаточно 🧫 BioCoins.\n"
             f"Нужно: <b>{amount} 🧫</b>, у тебя: <b>{bio_balance} 🧫</b>\n\n"
             "Введи другую сумму:",
             reply_markup=transfer_back_kb(),
-            parse_mode="HTML",
         )
         return
 
@@ -232,7 +238,8 @@ async def msg_transfer_amount(
     await state.update_data(amount=amount)
     await state.set_state(TransferStates.confirm)
 
-    await message.answer(
+    await smart_reply(
+        message,
         f"💸 <b>Подтверждение перевода</b>\n\n"
         f"Получатель: <b>@{escape(recipient_username)}</b>\n"
         f"Отправляете: <b>{amount} 🧫</b>\n"
@@ -240,7 +247,6 @@ async def msg_transfer_amount(
         f"Получит: <b>{received} 🧫</b>\n\n"
         "Подтвердить перевод?",
         reply_markup=transfer_confirm_kb(recipient_username, amount, received, commission),
-        parse_mode="HTML",
     )
 
 

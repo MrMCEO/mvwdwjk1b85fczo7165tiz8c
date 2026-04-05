@@ -29,6 +29,7 @@ from bot.services.laboratory import (
     spy_on_player,
     use_item,
 )
+from bot.utils.chat import smart_reply
 from bot.utils.emoji import render_virus_name
 
 router = Router(name="laboratory")
@@ -227,14 +228,14 @@ async def fsm_spy_target(
 
     raw_username = (message.text or "").strip()
     if not raw_username:
-        await message.answer("Имя пользователя не может быть пустым.")
+        await smart_reply(message, "Имя пользователя не может быть пустым.")
         return
 
     data = await spy_on_player(session, raw_username)
     if data is None:
-        await message.answer(
+        await smart_reply(
+            message,
             f"🔭 Игрок <b>{escape(raw_username)}</b> не найден.",
-            parse_mode="HTML",
         )
         return
 
@@ -277,7 +278,7 @@ async def fsm_spy_target(
         f"   Ветки прокачки:\n{im_branches}"
     )
 
-    await message.answer(text, reply_markup=lab_menu_kb(), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=lab_menu_kb())
 
 
 async def _finalize_spy_item(

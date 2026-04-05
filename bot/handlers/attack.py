@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from html import escape
 
 from aiogram import Router
@@ -19,11 +20,14 @@ from bot.services.combat import (
     attack_player,
     get_active_infections_by,
     get_active_infections_on,
+    get_random_target,
     try_cure,
 )
 from bot.services.notifications import should_notify
+from bot.utils.chat import smart_reply
 
 router = Router(name="attack")
+logger = logging.getLogger(__name__)
 
 
 class AttackStates(StatesGroup):
@@ -76,7 +80,8 @@ async def msg_attack_username(
     raw = (message.text or "").strip().lstrip("@")
 
     if not raw:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Пустой username. Попробуй ещё раз:",
             reply_markup=back_button("attack_menu"),
         )
@@ -89,16 +94,17 @@ async def msg_attack_username(
     target: User | None = result.scalar_one_or_none()
 
     if target is None:
-        await message.answer(
+        await smart_reply(
+            message,
             f"❌ Игрок <b>@{escape(raw)}</b> не найден.\n"
             "Убедись что он зарегистрирован в игре.",
             reply_markup=back_button("attack_menu"),
-            parse_mode="HTML",
         )
         return
 
     if target.tg_id == message.from_user.id:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Нельзя атаковать самого себя.",
             reply_markup=back_button("attack_menu"),
         )
@@ -107,13 +113,52 @@ async def msg_attack_username(
     await state.clear()
 
     target_display = f"@{target.username}" if target.username else f"id{target.tg_id}"
-    await message.answer(
+    await smart_reply(
+        message,
         f"⚔️ <b>Подтверждение атаки</b>\n\n"
         f"Цель: <b>{target_display}</b>\n\n"
         "Атаковать этого игрока?",
         reply_markup=attack_confirm_kb(target.tg_id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Random attack
+# ---------------------------------------------------------------------------
+
+
+@router.callback_query(lambda c: c.data == "random_attack")
+async def cb_random_attack(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Pick a random eligible target and show the confirmation screen."""
+    target = await get_random_target(session, callback.from_user.id)
+
+    if target is None:
+        await callback.message.edit_text(
+            "🎲 <b>Случайная атака</b>\n\n"
+            "❌ Нет доступных целей для атаки.\n"
+            "(Все игроки уже заражены или ты единственный участник.)",
+            reply_markup=attack_menu_kb(),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
+    virus_level = target.virus.level if target.virus else 0
+    immunity_level = target.immunity.level if target.immunity else 0
+    target_display = f"@{escape(target.username)}" if target.username else f"id{target.tg_id}"
+
+    await callback.message.edit_text(
+        f"🎲 <b>Случайная атака</b>\n\n"
+        f"Цель: <b>{target_display}</b>\n"
+        f"Уровень вируса: <b>{virus_level}</b>\n"
+        f"Уровень иммунитета: <b>{immunity_level}</b>\n\n"
+        "Атаковать этого игрока?",
+        reply_markup=attack_confirm_kb(target.tg_id),
         parse_mode="HTML",
     )
+    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -152,8 +197,8 @@ async def cb_confirm_attack(callback: CallbackQuery, session: AsyncSession) -> N
                     text=victim_notification["message"],
                     parse_mode="HTML",
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to notify victim %d: %s", victim_notification["user_id"], exc)
 
 
 # ---------------------------------------------------------------------------

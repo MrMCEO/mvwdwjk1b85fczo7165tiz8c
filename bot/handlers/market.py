@@ -41,6 +41,7 @@ from bot.services.market import (
     purchase_listing,
 )
 from bot.services.mutation import MUTATION_CONFIG, get_inventory_mutations
+from bot.utils.chat import smart_reply
 
 router = Router(name="market")
 
@@ -494,7 +495,8 @@ async def msg_sell_item_price(
         if price <= 0:
             raise ValueError
     except ValueError:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Введи целое положительное число. Попробуй ещё раз:",
             reply_markup=back_button("market_menu"),
         )
@@ -505,11 +507,11 @@ async def msg_sell_item_price(
     await state.clear()
 
     if item_id is None:
-        await message.answer("❌ Произошла ошибка. Начни заново.", reply_markup=market_menu_kb())
+        await smart_reply(message, "❌ Произошла ошибка. Начни заново.", reply_markup=market_menu_kb())
         return
 
     success, msg = await create_item_listing(session, message.from_user.id, item_id, price)
-    await message.answer(msg, reply_markup=market_menu_kb(), parse_mode="HTML")
+    await smart_reply(message, msg, reply_markup=market_menu_kb())
 
 
 # ---------------------------------------------------------------------------
@@ -632,7 +634,8 @@ async def msg_sell_mutation_price(
         if price <= 0:
             raise ValueError
     except ValueError:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Введи целое положительное число. Попробуй ещё раз:",
             reply_markup=back_button("market_menu"),
         )
@@ -643,13 +646,13 @@ async def msg_sell_mutation_price(
     await state.clear()
 
     if mutation_id is None:
-        await message.answer("❌ Произошла ошибка. Начни заново.", reply_markup=market_menu_kb())
+        await smart_reply(message, "❌ Произошла ошибка. Начни заново.", reply_markup=market_menu_kb())
         return
 
     success, msg = await create_mutation_listing(
         session, message.from_user.id, mutation_id, price
     )
-    await message.answer(msg, reply_markup=market_menu_kb(), parse_mode="HTML")
+    await smart_reply(message, msg, reply_markup=market_menu_kb())
 
 
 # ---------------------------------------------------------------------------
@@ -675,7 +678,8 @@ async def cb_market_create_contract(callback: CallbackQuery, state: FSMContext) 
 async def msg_contract_username(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").strip()
     if not raw:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Username не может быть пустым. Попробуй ещё раз:",
             reply_markup=back_button("market_menu"),
         )
@@ -684,11 +688,11 @@ async def msg_contract_username(message: Message, state: FSMContext) -> None:
     clean = raw.lstrip("@")
     await state.update_data(contract_target=clean)
     await state.set_state(MarketContractStates.waiting_for_reward)
-    await message.answer(
+    await smart_reply(
+        message,
         f"🎯 Цель: <b>@{escape(clean)}</b>\n\n"
         "Введи <b>награду в 🧫 BioCoins</b> для исполнителя контракта:",
         reply_markup=back_button("market_menu"),
-        parse_mode="HTML",
     )
 
 
@@ -702,7 +706,8 @@ async def msg_contract_reward(
         if reward <= 0:
             raise ValueError
     except ValueError:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Введи целое положительное число. Попробуй ещё раз:",
             reply_markup=back_button("market_menu"),
         )
@@ -715,8 +720,8 @@ async def msg_contract_reward(
     success, msg = await create_hit_contract(
         session, message.from_user.id, target, reward
     )
-    await message.answer(
+    await smart_reply(
+        message,
         msg,
         reply_markup=market_menu_kb(),
-        parse_mode="HTML",
     )

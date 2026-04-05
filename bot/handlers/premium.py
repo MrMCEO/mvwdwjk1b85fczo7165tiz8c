@@ -21,6 +21,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.premium import status_confirm_kb, status_menu_kb
+from bot.utils.chat import smart_reply
 from bot.services.premium import (
     STATUS_CONFIG,
     UserStatus,
@@ -285,18 +286,18 @@ async def msg_prefix_input(
     await state.clear()
 
     if not success:
-        await message.answer(
+        await smart_reply(
+            message,
             result_msg,
             reply_markup=_prefix_enter_kb(),
-            parse_mode="HTML",
         )
         await state.set_state(PrefixStates.waiting_for_prefix)
         return
 
     info = await get_premium_info(session, message.from_user.id)
     text = f"{result_msg}\n\n" + _fmt_premium_menu(info)
-    await message.answer(
+    await smart_reply(
+        message,
         text,
         reply_markup=status_menu_kb(current_status=info["status"]),
-        parse_mode="HTML",
     )

@@ -30,6 +30,7 @@ from bot.handlers.start import router as start_router
 from bot.handlers.text_commands import router as text_commands_router
 from bot.handlers.transfer import router as transfer_router
 from bot.handlers.virus import router as virus_router
+from bot.middlewares.callback_owner import CallbackOwnerMiddleware
 from bot.middlewares.db import DbSessionMiddleware
 from bot.models.base import init_db
 from bot.services.tick import start_scheduler
@@ -66,6 +67,9 @@ async def main() -> None:
     dp.startup.register(on_startup)
 
     # Register middlewares (applied to all update types)
+    # CallbackOwnerMiddleware runs first (on callback_query observer) so that
+    # foreign-button clicks in groups are rejected before a DB session is opened.
+    dp.callback_query.middleware(CallbackOwnerMiddleware())
     dp.update.middleware(DbSessionMiddleware())
 
     # Connect routers — order matters: start first, then menu, then sections

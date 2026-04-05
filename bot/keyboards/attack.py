@@ -7,9 +7,10 @@ _PAGE_SIZE = 5
 
 
 def attack_menu_kb() -> InlineKeyboardMarkup:
-    """Attack menu: enter target username, view infections, back."""
+    """Attack menu: enter target username, random attack, view infections, back."""
     builder = InlineKeyboardBuilder()
     builder.button(text="⚔️ Ввести цель (@username)", callback_data="attack_enter")
+    builder.button(text="🎲 Случайная атака",          callback_data="random_attack")
     builder.button(text="🦠 Мои заражения",            callback_data="my_infections")
     builder.button(text="◀️ Назад",                    callback_data="main_menu")
     builder.adjust(1)

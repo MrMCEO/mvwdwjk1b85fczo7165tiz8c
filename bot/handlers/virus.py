@@ -16,6 +16,7 @@ from bot.keyboards.virus import virus_menu_kb
 from bot.models.virus import Virus
 from bot.services.premium import get_virus_name_limit
 from bot.services.upgrade import get_virus_stats, upgrade_virus_branch
+from bot.utils.chat import smart_reply
 from bot.utils.emoji import render_virus_name
 from bot.utils.throttle import check_throttle
 
@@ -139,14 +140,16 @@ async def msg_virus_name(
     name_limit = await get_virus_name_limit(session, message.from_user.id)
 
     if not raw:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Имя не может быть пустым. Введи название вируса:",
             reply_markup=_rename_cancel_kb(),
         )
         return
 
     if len(raw) > name_limit:
-        await message.answer(
+        await smart_reply(
+            message,
             f"❌ Максимум {name_limit} символов. Попробуй снова:",
             reply_markup=_rename_cancel_kb(),
         )
@@ -168,11 +171,11 @@ async def msg_virus_name(
         user = message.from_user
         is_premium = bool(getattr(user, "is_premium", False))
         if not is_premium:
-            await message.answer(
+            await smart_reply(
+                message,
                 "⭐ Кастомные эмодзи доступны только с <b>Премиум-подпиской</b> Telegram.\n\n"
                 "Введи обычное имя (обычные эмодзи разрешены):",
                 reply_markup=_rename_cancel_kb(),
-                parse_mode="HTML",
             )
             return
 
@@ -186,7 +189,7 @@ async def msg_virus_name(
     virus = result.scalar_one_or_none()
     if virus is None:
         await state.clear()
-        await message.answer("❌ Вирус не найден.")
+        await smart_reply(message, "❌ Вирус не найден.")
         return
 
     virus.name = raw
@@ -200,8 +203,8 @@ async def msg_virus_name(
     menu_text = _fmt_virus_stats(data)
     upgrades = data.get("upgrades")
     display_name = render_virus_name(raw, virus.name_entities_json)
-    await message.answer(
+    await smart_reply(
+        message,
         f"✅ Вирус назван: <b>{display_name}</b>\n\n" + menu_text,
         reply_markup=virus_menu_kb(upgrades),
-        parse_mode="HTML",
     )

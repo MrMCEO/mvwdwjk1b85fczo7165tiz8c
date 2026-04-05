@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     bot_token: str
     admin_ids: list[int] = []
-    db_url: str = "sqlite+aiosqlite:///./data/biowars.db"
+    db_url: str = "postgresql+asyncpg://biowars_user:biowars_dev@localhost/biowars"
 
     @field_validator("admin_ids", mode="before")
     @classmethod

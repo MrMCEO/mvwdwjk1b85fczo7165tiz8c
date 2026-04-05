@@ -12,10 +12,16 @@ from bot.config import get_settings
 
 settings = get_settings()
 
+_is_postgres = settings.db_url.startswith("postgresql")
+
 engine = create_async_engine(
     settings.db_url,
     echo=False,
     future=True,
+    **({
+        "pool_size": 20,
+        "max_overflow": 10,
+    } if _is_postgres else {}),
 )
 
 AsyncSessionFactory = async_sessionmaker(

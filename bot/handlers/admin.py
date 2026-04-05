@@ -63,6 +63,7 @@ from bot.services.promo import (
     get_promo_info,
     list_promos,
 )
+from bot.utils.chat import smart_reply
 
 logger = logging.getLogger(__name__)
 router = Router(name="admin")
@@ -283,16 +284,16 @@ async def cmd_promo(message: Message, session: AsyncSession) -> None:
     """Activate a promo code. Available to all players."""
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer(
+        await smart_reply(
+            message,
             "❓ Использование: <code>/promo КОД</code>\n"
             "Пример: <code>/promo WELCOME</code>",
-            parse_mode="HTML",
         )
         return
 
     code = parts[1].strip()
     ok, msg = await activate_promo(session, message.from_user.id, code)
-    await message.answer(msg, parse_mode="HTML")
+    await smart_reply(message, msg)
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +304,7 @@ async def cmd_promo(message: Message, session: AsyncSession) -> None:
 async def _deny(message: Message | None, callback: CallbackQuery | None = None) -> None:
     text = "⛔ Доступ запрещён. Эта команда только для администраторов."
     if message:
-        await message.answer(text)
+        await smart_reply(message, text)
     elif callback:
         await callback.answer(text, show_alert=True)
 
@@ -318,12 +319,12 @@ async def cmd_admin(message: Message) -> None:
     if not _is_admin(message.from_user.id):
         await _deny(message)
         return
-    await message.answer(
+    await smart_reply(
+        message,
         "⚙️ <b>Админ-панель</b>\n\n"
         "Добро пожаловать в панель управления BioWars.\n"
         "Выберите раздел:",
         reply_markup=admin_menu_kb(),
-        parse_mode="HTML",
     )
 
 
@@ -360,7 +361,8 @@ async def cmd_promo_create(message: Message, session: AsyncSession) -> None:
     parts = (message.text or "").split()
     # parts[0] = /promo_create
     if len(parts) < 5:
-        await message.answer(
+        await smart_reply(
+            message,
             "❓ Использование:\n"
             "<code>/promo_create КОД БИО ПРЕМИУМ МАКС [ЧАСЫ]</code>\n\n"
             "Примеры:\n"
@@ -368,7 +370,6 @@ async def cmd_promo_create(message: Message, session: AsyncSession) -> None:
             "→ +500 bio, 100 активаций, бессрочно\n\n"
             "<code>/promo_create VIP 0 100 10 48</code>\n"
             "→ +100 premium, 10 активаций, 48ч",
-            parse_mode="HTML",
         )
         return
 
@@ -379,7 +380,7 @@ async def cmd_promo_create(message: Message, session: AsyncSession) -> None:
         max_act = int(parts[4])
         hours = int(parts[5]) if len(parts) >= 6 else None
     except ValueError:
-        await message.answer("❌ Неверный формат. bio, premium, max_activations и hours — целые числа.")
+        await smart_reply(message, "❌ Неверный формат. bio, premium, max_activations и hours — целые числа.")
         return
 
     ok, msg = await create_promo(
@@ -391,7 +392,7 @@ async def cmd_promo_create(message: Message, session: AsyncSession) -> None:
         created_by=message.from_user.id,
         expires_hours=hours,
     )
-    await message.answer(msg, parse_mode="HTML")
+    await smart_reply(message, msg)
 
 
 @router.message(Command("promo_delete"))
@@ -403,11 +404,11 @@ async def cmd_promo_delete(message: Message, session: AsyncSession) -> None:
 
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer("❓ Использование: <code>/promo_delete КОД</code>", parse_mode="HTML")
+        await smart_reply(message, "❓ Использование: <code>/promo_delete КОД</code>")
         return
 
     ok, msg = await delete_promo(session, parts[1].strip())
-    await message.answer(msg, parse_mode="HTML")
+    await smart_reply(message, msg)
 
 
 @router.message(Command("promo_list"))
@@ -431,7 +432,7 @@ async def cmd_promo_list(message: Message, session: AsyncSession) -> None:
         "<b>Текущие промокоды:</b>\n"
         + _fmt_promo_list(promos)
     )
-    await message.answer(text, reply_markup=admin_promos_kb(promos), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=admin_promos_kb(promos))
 
 
 @router.message(Command("promo_info"))
@@ -443,18 +444,18 @@ async def cmd_promo_info(message: Message, session: AsyncSession) -> None:
 
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer("❓ Использование: <code>/promo_info КОД</code>", parse_mode="HTML")
+        await smart_reply(message, "❓ Использование: <code>/promo_info КОД</code>")
         return
 
     info = await get_promo_info(session, parts[1].strip())
     if info is None:
-        await message.answer("❌ Промокод не найден.", parse_mode="HTML")
+        await smart_reply(message, "❌ Промокод не найден.")
         return
 
-    await message.answer(
+    await smart_reply(
+        message,
         _fmt_promo_detail(info),
         reply_markup=admin_promo_detail_kb(info["code"], info["is_active"] and not info["expired"]),
-        parse_mode="HTML",
     )
 
 
@@ -472,21 +473,21 @@ async def cmd_player(message: Message, session: AsyncSession) -> None:
 
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer(
+        await smart_reply(
+            message,
             "❓ Использование: <code>/player @username</code> или <code>/player ID</code>",
-            parse_mode="HTML",
         )
         return
 
     data = await lookup_player(session, parts[1].strip())
     if data is None:
-        await message.answer("❌ Игрок не найден.")
+        await smart_reply(message, "❌ Игрок не найден.")
         return
 
-    await message.answer(
+    await smart_reply(
+        message,
         _fmt_player_card(data),
         reply_markup=admin_player_kb(data["user"]["tg_id"]),
-        parse_mode="HTML",
     )
 
 
@@ -499,9 +500,9 @@ async def cmd_player_logs(message: Message, session: AsyncSession) -> None:
 
     parts = (message.text or "").split()
     if len(parts) < 2:
-        await message.answer(
+        await smart_reply(
+            message,
             "❓ Использование: <code>/player_logs @user [all|upgrades|attacks|purchases]</code>",
-            parse_mode="HTML",
         )
         return
 
@@ -512,13 +513,13 @@ async def cmd_player_logs(message: Message, session: AsyncSession) -> None:
 
     data = await lookup_player(session, identifier)
     if data is None:
-        await message.answer("❌ Игрок не найден.")
+        await smart_reply(message, "❌ Игрок не найден.")
         return
 
     user_id = data["user"]["tg_id"]
     entries = await get_player_logs(session, user_id, log_type)
     text = _fmt_logs(entries, log_type, user_id)
-    await message.answer(text, reply_markup=admin_logs_kb(user_id, log_type), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=admin_logs_kb(user_id, log_type))
 
 
 @router.message(Command("give"))
@@ -530,10 +531,10 @@ async def cmd_give(message: Message, session: AsyncSession) -> None:
 
     parts = (message.text or "").split()
     if len(parts) < 4:
-        await message.answer(
+        await smart_reply(
+            message,
             "❓ Использование: <code>/give @user БИО ПРЕМИУМ</code>\n"
             "Пример: <code>/give @MrKatleta 1000 50</code>",
-            parse_mode="HTML",
         )
         return
 
@@ -542,16 +543,16 @@ async def cmd_give(message: Message, session: AsyncSession) -> None:
         bio = int(parts[2])
         premium = int(parts[3])
     except ValueError:
-        await message.answer("❌ bio и premium должны быть целыми числами.")
+        await smart_reply(message, "❌ bio и premium должны быть целыми числами.")
         return
 
     data = await lookup_player(session, identifier)
     if data is None:
-        await message.answer("❌ Игрок не найден.")
+        await smart_reply(message, "❌ Игрок не найден.")
         return
 
     ok, msg = await give_currency(session, data["user"]["tg_id"], bio, premium)
-    await message.answer(msg, parse_mode="HTML")
+    await smart_reply(message, msg)
 
 
 @router.message(Command("setbalance"))
@@ -563,10 +564,10 @@ async def cmd_setbalance(message: Message, session: AsyncSession) -> None:
 
     parts = (message.text or "").split()
     if len(parts) < 4:
-        await message.answer(
+        await smart_reply(
+            message,
             "❓ Использование: <code>/setbalance @user БИО ПРЕМИУМ</code>\n"
             "Пример: <code>/setbalance @MrKatleta 5000 200</code>",
-            parse_mode="HTML",
         )
         return
 
@@ -575,16 +576,16 @@ async def cmd_setbalance(message: Message, session: AsyncSession) -> None:
         bio = int(parts[2])
         premium = int(parts[3])
     except ValueError:
-        await message.answer("❌ bio и premium должны быть целыми числами.")
+        await smart_reply(message, "❌ bio и premium должны быть целыми числами.")
         return
 
     data = await lookup_player(session, identifier)
     if data is None:
-        await message.answer("❌ Игрок не найден.")
+        await smart_reply(message, "❌ Игрок не найден.")
         return
 
     ok, msg = await set_balance(session, data["user"]["tg_id"], bio, premium)
-    await message.answer(msg, parse_mode="HTML")
+    await smart_reply(message, msg)
 
 
 # ---------------------------------------------------------------------------
@@ -729,17 +730,17 @@ async def fsm_find_player_input(message: Message, session: AsyncSession, state: 
 
     data = await lookup_player(session, identifier)
     if data is None:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Игрок не найден. Проверь @username или ID.",
             reply_markup=cancel_kb(),
-            parse_mode="HTML",
         )
         return
 
-    await message.answer(
+    await smart_reply(
+        message,
         _fmt_player_card(data),
         reply_markup=admin_player_kb(data["user"]["tg_id"]),
-        parse_mode="HTML",
     )
 
 
@@ -881,16 +882,14 @@ async def fsm_give_input(message: Message, session: AsyncSession, state: FSMCont
     if prefilled_user_id:
         # Input is just "bio premium"
         if len(parts) < 2:
-            await message.answer("❌ Формат: <code>БИО ПРЕМИУМ</code>", parse_mode="HTML")
+            await smart_reply(message, "❌ Формат: <code>БИО ПРЕМИУМ</code>")
             return
         identifier = str(prefilled_user_id)
         bio_str, prem_str = parts[0], parts[1]
     else:
         # Input is "@user bio premium"
         if len(parts) < 3:
-            await message.answer(
-                "❌ Формат: <code>@username БИО ПРЕМИУМ</code>", parse_mode="HTML"
-            )
+            await smart_reply(message, "❌ Формат: <code>@username БИО ПРЕМИУМ</code>")
             return
         identifier, bio_str, prem_str = parts[0], parts[1], parts[2]
 
@@ -898,22 +897,22 @@ async def fsm_give_input(message: Message, session: AsyncSession, state: FSMCont
         bio = int(bio_str)
         premium = int(prem_str)
     except ValueError:
-        await message.answer("❌ bio и premium должны быть целыми числами.")
+        await smart_reply(message, "❌ bio и premium должны быть целыми числами.")
         return
 
     data = await lookup_player(session, identifier)
     if data is None:
-        await message.answer("❌ Игрок не найден.")
+        await smart_reply(message, "❌ Игрок не найден.")
         return
 
     user_id = data["user"]["tg_id"]
     uname = f"@{data['user']['username']}" if data["user"]["username"] else str(user_id)
 
-    await message.answer(
+    await smart_reply(
+        message,
         f"Выдать <b>{uname}</b>:\n"
         f"🧫 {bio:,} BioCoins и 💎 {premium:,} PremiumCoins?",
         reply_markup=confirm_give_kb(user_id, bio, premium),
-        parse_mode="HTML",
     )
 
 
@@ -985,18 +984,18 @@ async def fsm_setbal_input(message: Message, session: AsyncSession, state: FSMCo
 
     parts = (message.text or "").strip().split()
     if len(parts) < 2:
-        await message.answer("❌ Формат: <code>БИО ПРЕМИУМ</code>", parse_mode="HTML")
+        await smart_reply(message, "❌ Формат: <code>БИО ПРЕМИУМ</code>")
         return
 
     try:
         bio = int(parts[0])
         premium = int(parts[1])
     except ValueError:
-        await message.answer("❌ bio и premium должны быть целыми числами.")
+        await smart_reply(message, "❌ bio и premium должны быть целыми числами.")
         return
 
     ok, msg = await set_balance(session, target_user_id, bio, premium)
-    await message.answer(msg, parse_mode="HTML")
+    await smart_reply(message, msg)
 
 
 # ---------------------------------------------------------------------------

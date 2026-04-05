@@ -12,6 +12,7 @@ from bot.keyboards.common import back_button
 from bot.keyboards.resources import resources_menu_kb
 from bot.services.donation import EXCHANGE_RATE, convert_premium_to_bio
 from bot.services.resource import claim_daily_bonus, get_balance, mine_resources
+from bot.utils.chat import smart_reply
 
 router = Router(name="resources")
 
@@ -96,7 +97,8 @@ async def msg_convert_amount(
     """Process the amount the user typed."""
     raw = (message.text or "").strip()
     if not raw.isdigit() or int(raw) <= 0:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Введи целое положительное число.",
             reply_markup=back_button("resources_menu"),
         )
@@ -104,7 +106,8 @@ async def msg_convert_amount(
 
     amount = int(raw)
     if amount > 1_000_000_000:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Слишком большое число.",
             reply_markup=back_button("resources_menu"),
         )
@@ -114,8 +117,8 @@ async def msg_convert_amount(
 
     success, msg = await convert_premium_to_bio(session, message.from_user.id, amount)
     icon = "✅" if success else "❌"
-    await message.answer(
+    await smart_reply(
+        message,
         f"{icon} {msg}",
         reply_markup=resources_menu_kb(),
-        parse_mode="HTML",
     )

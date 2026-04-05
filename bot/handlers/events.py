@@ -33,6 +33,7 @@ from bot.keyboards.events import (
     pandemic_kb,
 )
 from bot.models.event import EventType
+from bot.utils.chat import smart_reply
 from bot.services.event import (
     DEFAULT_BOSS_HP,
     EVENT_REWARDS,
@@ -356,16 +357,17 @@ async def cmd_event_create(message: Message, session: AsyncSession) -> None:
                  immunity_wave, mutation_storm, ceasefire
     """
     if not _is_admin(message.from_user.id):
-        await message.answer("❌ Недостаточно прав.")
+        await smart_reply(message, "❌ Недостаточно прав.")
         return
 
     args = message.text.split(maxsplit=3)[1:]  # skip the command itself
     if len(args) < 3:
-        await message.answer(
+        await smart_reply(
+            message,
             "Использование: /event_create {тип} {часы} {название}\n\n"
             "Доступные типы: pandemic, gold_rush, arms_race, plague_season, "
             "immunity_wave, mutation_storm, ceasefire\n\n"
-            "Пример: /event_create gold_rush 12 Золотая лихорадка"
+            "Пример: /event_create gold_rush 12 Золотая лихорадка",
         )
         return
 
@@ -373,9 +375,10 @@ async def cmd_event_create(message: Message, session: AsyncSession) -> None:
 
     event_type = _TYPE_ALIASES.get(type_str.lower())
     if event_type is None:
-        await message.answer(
+        await smart_reply(
+            message,
             f"❌ Неизвестный тип ивента: {escape(type_str)}\n\n"
-            "Доступные типы: " + ", ".join(_TYPE_ALIASES.keys())
+            "Доступные типы: " + ", ".join(_TYPE_ALIASES.keys()),
         )
         return
 
@@ -384,7 +387,7 @@ async def cmd_event_create(message: Message, session: AsyncSession) -> None:
         if duration_hours <= 0:
             raise ValueError
     except ValueError:
-        await message.answer("❌ Количество часов должно быть положительным числом.")
+        await smart_reply(message, "❌ Количество часов должно быть положительным числом.")
         return
 
     if event_type == EventType.PANDEMIC:
@@ -407,13 +410,13 @@ async def cmd_event_create(message: Message, session: AsyncSession) -> None:
         )
 
     emoji = EVENT_EMOJI.get(event_type, "🌍")
-    await message.answer(
+    await smart_reply(
+        message,
         f"✅ Ивент создан!\n\n"
         f"{emoji} <b>{escape(event.title)}</b>\n"
         f"ID: {event.id}\n"
         f"Тип: {event.event_type.value}\n"
         f"Длительность: {duration_hours}ч",
-        parse_mode="HTML",
     )
 
 
@@ -421,26 +424,26 @@ async def cmd_event_create(message: Message, session: AsyncSession) -> None:
 async def cmd_event_stop(message: Message, session: AsyncSession) -> None:
     """Admin: /event_stop {id}"""
     if not _is_admin(message.from_user.id):
-        await message.answer("❌ Недостаточно прав.")
+        await smart_reply(message, "❌ Недостаточно прав.")
         return
 
     parts = message.text.split()
     if len(parts) < 2:
-        await message.answer("Использование: /event_stop {ID ивента}")
+        await smart_reply(message, "Использование: /event_stop {ID ивента}")
         return
 
     try:
         event_id = int(parts[1])
     except ValueError:
-        await message.answer("❌ ID ивента должен быть числом.")
+        await smart_reply(message, "❌ ID ивента должен быть числом.")
         return
 
     success, _notifications = await stop_event(session, event_id)
 
     if success:
-        await message.answer(f"✅ Ивент #{event_id} остановлен.")
+        await smart_reply(message, f"✅ Ивент #{event_id} остановлен.")
     else:
-        await message.answer(f"❌ Ивент #{event_id} не найден или уже завершён.")
+        await smart_reply(message, f"❌ Ивент #{event_id} не найден или уже завершён.")
 
 
 @router.message(Command("pandemic"))
@@ -451,7 +454,7 @@ async def cmd_pandemic(message: Message, session: AsyncSession) -> None:
     Example: /pandemic 24 10000
     """
     if not _is_admin(message.from_user.id):
-        await message.answer("❌ Недостаточно прав.")
+        await smart_reply(message, "❌ Недостаточно прав.")
         return
 
     parts = message.text.split()
@@ -459,7 +462,7 @@ async def cmd_pandemic(message: Message, session: AsyncSession) -> None:
     boss_hp = int(parts[2]) if len(parts) > 2 else DEFAULT_BOSS_HP
 
     if hours <= 0 or boss_hp <= 0:
-        await message.answer("❌ Количество часов и HP босса должны быть > 0.")
+        await smart_reply(message, "❌ Количество часов и HP босса должны быть > 0.")
         return
 
     event = await start_pandemic(
@@ -469,10 +472,10 @@ async def cmd_pandemic(message: Message, session: AsyncSession) -> None:
         created_by=message.from_user.id,
     )
 
-    await message.answer(
+    await smart_reply(
+        message,
         f"💀 <b>Пандемия запущена!</b>\n\n"
         f"ID ивента: {event.id}\n"
         f"HP босса: {boss_hp:,}\n"
         f"Длительность: {hours}ч",
-        parse_mode="HTML",
     )

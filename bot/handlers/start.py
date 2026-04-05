@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.main import main_menu_kb
 from bot.services.player import get_or_create_player
 from bot.services.referral import register_referral
+from bot.utils.chat import smart_reply
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +57,8 @@ async def cmd_start(message: Message, session: AsyncSession) -> None:
     greeting = f"👋 <b>{name}</b>\n\n"
     text = _WELCOME_NEW if is_new else _WELCOME_BACK
 
-    await message.answer(
+    await smart_reply(
+        message,
         greeting + text,
         reply_markup=main_menu_kb(),
-        parse_mode="HTML",
     )

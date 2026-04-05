@@ -48,6 +48,7 @@ from bot.services.referral import get_referral_link, get_referral_stats
 from bot.services.resource import get_balance
 from bot.services.transfer import get_daily_transferred, get_transfer_limit
 from bot.services.upgrade import get_immunity_stats, get_virus_stats
+from bot.utils.chat import smart_reply
 
 router = Router(name="text_commands")
 
@@ -101,10 +102,10 @@ _SETTINGS_TRIGGERS = {"настройки", "⚙️ настройки"}
 async def text_menu(message: Message, session: AsyncSession) -> None:
     """Текстовая команда: показать главное меню."""
     await get_or_create_player(session, message.from_user.id, message.from_user.username or "")
-    await message.answer(
+    await smart_reply(
+        message,
         "🧬 <b>BioWars — Главное меню</b>\n\nВыбери раздел:",
         reply_markup=main_menu_kb(),
-        parse_mode="HTML",
     )
 
 
@@ -118,7 +119,7 @@ async def text_profile(message: Message, session: AsyncSession) -> None:
     """Текстовая команда: показать профиль игрока."""
     data = await get_player_profile(session, message.from_user.id)
     text = _fmt_profile(data)
-    await message.answer(text, reply_markup=profile_kb(), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=profile_kb())
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +133,7 @@ async def text_virus(message: Message, session: AsyncSession) -> None:
     data = await get_virus_stats(session, message.from_user.id)
     text = _fmt_virus_stats(data)
     upgrades = data.get("upgrades")
-    await message.answer(text, reply_markup=virus_menu_kb(upgrades), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=virus_menu_kb(upgrades))
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +147,7 @@ async def text_immunity(message: Message, session: AsyncSession) -> None:
     data = await get_immunity_stats(session, message.from_user.id)
     text = _fmt_immunity_stats(data)
     upgrades = data.get("upgrades")
-    await message.answer(text, reply_markup=immunity_menu_kb(upgrades), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=immunity_menu_kb(upgrades))
 
 
 # ---------------------------------------------------------------------------
@@ -157,12 +158,12 @@ async def text_immunity(message: Message, session: AsyncSession) -> None:
 @router.message(F.text.lower().in_(_ATTACK_TRIGGERS))
 async def text_attack(message: Message) -> None:
     """Текстовая команда: показать меню атаки."""
-    await message.answer(
+    await smart_reply(
+        message,
         "⚔️ <b>Атака</b>\n\n"
         "Заражай других игроков своим вирусом!\n"
         "Каждая атака имеет кулдаун 30 минут.",
         reply_markup=attack_menu_kb(),
-        parse_mode="HTML",
     )
 
 
@@ -176,7 +177,7 @@ async def text_resources(message: Message, session: AsyncSession) -> None:
     """Текстовая команда: показать меню ресурсов."""
     balance = await get_balance(session, message.from_user.id)
     text = _fmt_resources(balance) if balance else "❌ Игрок не найден."
-    await message.answer(text, reply_markup=resources_menu_kb(), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=resources_menu_kb())
 
 
 # ---------------------------------------------------------------------------
@@ -187,10 +188,10 @@ async def text_resources(message: Message, session: AsyncSession) -> None:
 @router.message(F.text.lower().in_(_RATING_TRIGGERS))
 async def text_rating(message: Message) -> None:
     """Текстовая команда: показать меню рейтинга."""
-    await message.answer(
+    await smart_reply(
+        message,
         "🏆 <b>Рейтинги</b>\n\nВыбери тип рейтинга:",
         reply_markup=rating_menu_kb(),
-        parse_mode="HTML",
     )
 
 
@@ -214,7 +215,7 @@ async def text_shop(message: Message, session: AsyncSession) -> None:
         f"Курс обмена: 1 💎 PremiumCoin = {EXCHANGE_RATE} 🧫 BioCoins\n\n"
         "Покупка premium coins — <i>интеграция платежей в разработке</i> 🚧"
     )
-    await message.answer(text, reply_markup=shop_menu_kb(), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=shop_menu_kb())
 
 
 # ---------------------------------------------------------------------------
@@ -225,12 +226,12 @@ async def text_shop(message: Message, session: AsyncSession) -> None:
 @router.message(F.text.lower().in_(_INFO_TRIGGERS))
 async def text_info(message: Message) -> None:
     """Текстовая команда: отправить ссылку на гайд."""
-    await message.answer(
+    await smart_reply(
+        message,
         "📖 <b>Полный гайд по BioWars</b>\n\n"
         "Подробное описание всех механик, веток прокачки, "
         "формул и советов для новичков:\n\n"
         f'👉 <a href="{GUIDE_URL}">Открыть гайд</a>',
-        parse_mode="HTML",
         disable_web_page_preview=False,
     )
 
@@ -245,19 +246,19 @@ async def text_alliance(message: Message, session: AsyncSession) -> None:
     """Текстовая команда: показать меню альянса."""
     info = await get_alliance_info(session, message.from_user.id)
     if info is None:
-        await message.answer(
+        await smart_reply(
+            message,
             "🏰 <b>Альянсы</b>\n\n"
             "Ты не состоишь ни в каком альянсе.\n\n"
             "Создай свой или вступи в существующий!",
             reply_markup=alliance_no_clan_kb(),
-            parse_mode="HTML",
         )
     else:
         text = _fmt_alliance_info(info)
-        await message.answer(
+        await smart_reply(
+            message,
             text,
             reply_markup=alliance_info_kb(info["user_role"]),
-            parse_mode="HTML",
         )
 
 
@@ -285,7 +286,7 @@ async def text_events(message: Message, session: AsyncSession) -> None:
         lines.append("\nВыбери ивент для подробностей:")
         text = "\n".join(lines)
 
-    await message.answer(text, reply_markup=events_menu_kb(events), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=events_menu_kb(events))
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +306,7 @@ async def text_laboratory(message: Message, session: AsyncSession) -> None:
         "Предметы одноразовые и хранятся в инвентаре.\n\n"
         f"📦 Предметов в инвентаре: <b>{total_items}</b>"
     )
-    await message.answer(text, reply_markup=lab_menu_kb(), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=lab_menu_kb())
 
 
 # ---------------------------------------------------------------------------
@@ -316,12 +317,12 @@ async def text_laboratory(message: Message, session: AsyncSession) -> None:
 @router.message(F.text.lower().in_(_MARKET_TRIGGERS))
 async def text_market(message: Message) -> None:
     """Текстовая команда: показать меню БиоБиржи."""
-    await message.answer(
+    await smart_reply(
+        message,
         "🔬 <b>БиоБиржа</b>\n\n"
         "Торгуй предметами и мутациями с другими игроками\n"
         "или размести контракт на заражение.",
         reply_markup=market_menu_kb(),
-        parse_mode="HTML",
     )
 
 
@@ -335,7 +336,7 @@ async def text_premium(message: Message, session: AsyncSession) -> None:
     """Текстовая команда: открыть меню премиум-подписки."""
     info = await get_premium_info(session, message.from_user.id)
     text = _fmt_premium_menu(info)
-    await message.answer(text, reply_markup=premium_menu_kb(info["is_active"]), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=premium_menu_kb(info["is_active"]))
 
 
 # ---------------------------------------------------------------------------
@@ -347,15 +348,15 @@ async def text_premium(message: Message, session: AsyncSession) -> None:
 async def text_admin(message: Message) -> None:
     """Текстовая команда: открыть админ-панель (только для администраторов)."""
     if message.from_user.id not in get_settings().admin_ids:
-        await message.answer("⛔ Доступ запрещён. Эта команда только для администраторов.")
+        await smart_reply(message, "⛔ Доступ запрещён. Эта команда только для администраторов.")
         return
 
-    await message.answer(
+    await smart_reply(
+        message,
         "⚙️ <b>Админ-панель</b>\n\n"
         "Добро пожаловать в панель управления BioWars.\n"
         "Выберите раздел:",
         reply_markup=admin_menu_kb(),
-        parse_mode="HTML",
     )
 
 
@@ -372,7 +373,7 @@ async def text_referral(message: Message, session: AsyncSession) -> None:
     stats = await get_referral_stats(session, user_id)
     has_claimable = any(r["is_available"] for r in stats["rewards"])
     text = _fmt_referral_menu(stats, link)
-    await message.answer(text, reply_markup=referral_menu_kb(has_claimable), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=referral_menu_kb(has_claimable))
 
 
 # ---------------------------------------------------------------------------
@@ -390,10 +391,10 @@ async def text_transfer(message: Message, session: AsyncSession) -> None:
     bio_balance = balance.get("bio_coins", 0) if balance else 0
 
     text = _fmt_transfer_menu(daily_used, daily_limit, bio_balance)
-    await message.answer(
+    await smart_reply(
+        message,
         text,
         reply_markup=transfer_menu_kb(daily_used, daily_limit),
-        parse_mode="HTML",
     )
 
 
@@ -412,7 +413,7 @@ async def text_settings(message: Message, session: AsyncSession) -> None:
     result = await session.execute(select(User).where(User.tg_id == message.from_user.id))
     user = result.scalar_one_or_none()
     if user is None:
-        await message.answer("❌ Игрок не найден. Используй /start.")
+        await smart_reply(message, "❌ Игрок не найден. Используй /start.")
         return
 
     text = (
@@ -422,4 +423,4 @@ async def text_settings(message: Message, session: AsyncSession) -> None:
         f"⏱ Кулдауны: {'✅ Вкл' if user.notify_cooldowns else '❌ Выкл'}\n"
         f"🌍 Ивенты: {'✅ Вкл' if user.notify_events else '❌ Выкл'}\n"
     )
-    await message.answer(text, reply_markup=settings_kb(user), parse_mode="HTML")
+    await smart_reply(message, text, reply_markup=settings_kb(user))

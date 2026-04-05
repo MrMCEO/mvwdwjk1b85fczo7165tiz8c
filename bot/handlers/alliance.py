@@ -68,6 +68,7 @@ from bot.services.alliance import (
     upgrade_alliance,
 )
 from bot.services.resource import get_balance
+from bot.utils.chat import smart_reply
 
 router = Router(name="alliance")
 
@@ -190,7 +191,8 @@ async def cb_alliance_create(callback: CallbackQuery, state: FSMContext) -> None
 async def msg_create_name(message: Message, state: FSMContext) -> None:
     name = (message.text or "").strip()
     if not name:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Название не может быть пустым. Попробуй ещё раз:",
             reply_markup=back_button("alliance_menu"),
         )
@@ -198,14 +200,14 @@ async def msg_create_name(message: Message, state: FSMContext) -> None:
 
     await state.update_data(name=name)
     await state.set_state(AllianceCreateStates.waiting_for_tag)
-    await message.answer(
+    await smart_reply(
+        message,
         f"✅ Название: <b>{escape(name)}</b>\n\n"
         "Теперь введи короткий тег альянса (2–5 символов).\n"
         "Буквы (рус/лат) и цифры, без пробелов.\n"
         "Будет отображаться как [ТЕГ] перед названием:\n\n"
         "Или нажми «Назад» для отмены:",
         reply_markup=back_button("alliance_menu"),
-        parse_mode="HTML",
     )
 
 
@@ -213,7 +215,8 @@ async def msg_create_name(message: Message, state: FSMContext) -> None:
 async def msg_create_tag(message: Message, state: FSMContext) -> None:
     tag = (message.text or "").strip()
     if not tag:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Тег не может быть пустым. Попробуй ещё раз:",
             reply_markup=back_button("alliance_menu"),
         )
@@ -224,14 +227,14 @@ async def msg_create_tag(message: Message, state: FSMContext) -> None:
 
     await state.update_data(tag=tag)
     await state.set_state(AllianceCreateStates.confirm)
-    await message.answer(
+    await smart_reply(
+        message,
         f"🏰 <b>Подтверждение создания альянса</b>\n\n"
         f"Название: <b>{escape(name)}</b>\n"
         f"Тег: <b>[{escape(tag.upper())}]</b>\n"
         f"Стоимость: <b>{ALLIANCE_CREATE_COST} 🧫 BioCoins</b>\n\n"
         "Создать альянс?",
         reply_markup=confirm_cancel_kb("alliance_create_confirm", "alliance_menu"),
-        parse_mode="HTML",
     )
 
 
@@ -361,7 +364,8 @@ async def msg_invite_username(
     await state.clear()
 
     if not raw:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Пустой username. Попробуй ещё раз.",
             reply_markup=back_button("alliance_menu"),
         )
@@ -371,10 +375,10 @@ async def msg_invite_username(
     info = await get_alliance_info(session, message.from_user.id)
     role = info["user_role"] if info else AllianceRole.MEMBER
 
-    await message.answer(
+    await smart_reply(
+        message,
         msg,
         reply_markup=alliance_info_kb(role),
-        parse_mode="HTML",
     )
 
 
@@ -660,10 +664,10 @@ async def msg_search_query(
     else:
         text = f"🔍 По запросу «{escape(query)}» ничего не найдено."
 
-    await message.answer(
+    await smart_reply(
+        message,
         text,
         reply_markup=alliance_search_kb(alliances),
-        parse_mode="HTML",
     )
 
 
@@ -883,7 +887,8 @@ async def msg_buy_coins_amount(
     try:
         amount = int(raw)
     except ValueError:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Введи целое число. Попробуй ещё раз.",
             reply_markup=back_button("alliance_upgrades"),
         )
@@ -894,13 +899,14 @@ async def msg_buy_coins_amount(
     info = await get_alliance_info(session, message.from_user.id)
     if info and info["user_role"] in (AllianceRole.LEADER, AllianceRole.OFFICER):
         upgrades = await get_alliance_upgrades(session, info["id"])
-        await message.answer(
+        await smart_reply(
+            message,
             msg + "\n\n" + _fmt_upgrades_text(info, upgrades),
             reply_markup=alliance_upgrades_kb(upgrades, info["user_role"], info["alliance_coins"]),
             parse_mode="HTML",
         )
     else:
-        await message.answer(msg, parse_mode="HTML")
+        await smart_reply(message, msg)
 
 
 # ---------------------------------------------------------------------------
@@ -947,7 +953,8 @@ async def msg_donate_amount(
     try:
         amount = int(raw)
     except ValueError:
-        await message.answer(
+        await smart_reply(
+            message,
             "❌ Введи целое число. Попробуй ещё раз.",
             reply_markup=back_button("alliance_menu"),
         )
@@ -963,10 +970,10 @@ async def msg_donate_amount(
         reqs = await get_pending_requests(session, info["id"])
         pending = len(reqs)
 
-    await message.answer(
+    await smart_reply(
+        message,
         msg,
         reply_markup=alliance_info_kb(role, pending_requests=pending),
-        parse_mode="HTML",
     )
 
 

@@ -182,5 +182,5 @@ async def test_activate_promo_credits_coins(session: AsyncSession):
     from bot.models.user import User
     result = await session.execute(select(User).where(User.tg_id == 9010))
     user = result.scalar_one()
-    assert user.bio_coins == 300
+    assert user.bio_coins == 500 + 300  # 500 starting + 300 promo bonus
     assert user.premium_coins == 50

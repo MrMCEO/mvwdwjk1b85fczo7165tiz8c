@@ -72,7 +72,7 @@ async def test_transfer_success(session: AsyncSession):
     recipient_result = await session.execute(select(User).where(User.tg_id == 8002))
     recipient = recipient_result.scalar_one()
     commission = max(1, int(100 * TRANSFER_COMMISSION))
-    assert recipient.bio_coins == 100 - commission
+    assert recipient.bio_coins == 500 + 100 - commission  # 500 starting + received amount
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +157,7 @@ async def test_transfer_commission(session: AsyncSession):
 
     result = await session.execute(select(User).where(User.tg_id == 8041))
     recipient = result.scalar_one()
-    assert recipient.bio_coins == expected_received
+    assert recipient.bio_coins == 500 + expected_received  # 500 starting + received amount
 
     # Check that the message mentions the commission amount
     assert str(expected_commission) in msg

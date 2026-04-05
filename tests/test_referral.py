@@ -169,8 +169,8 @@ async def test_claim_reward(session: AsyncSession):
 
     result = await session.execute(select(User).where(User.tg_id == 7020))
     user = result.scalar_one()
-    # Level 1 reward: 100 bio, 0 premium
-    assert user.bio_coins == 100
+    # Level 1 reward: 100 bio, 0 premium (user started with 500)
+    assert user.bio_coins == 500 + 100
     assert user.premium_coins == 0
 
 
@@ -285,10 +285,10 @@ async def test_claim_repeatable_reward_first_claim(session: AsyncSession):
     assert success is True
     assert str(REPEATABLE_BIO) in msg
 
-    # User got the coins
+    # User got the coins (started with 500)
     result = await session.execute(select(User).where(User.tg_id == 8100))
     user = result.scalar_one()
-    assert user.bio_coins == REPEATABLE_BIO
+    assert user.bio_coins == 500 + REPEATABLE_BIO
     assert user.repeatable_referral_claims == 1
 
 
@@ -337,7 +337,7 @@ async def test_claim_repeatable_reward_multiple_claims(session: AsyncSession):
 
     result = await session.execute(select(User).where(User.tg_id == 8300))
     user = result.scalar_one()
-    assert user.bio_coins == REPEATABLE_BIO * 2
+    assert user.bio_coins == 500 + REPEATABLE_BIO * 2  # 500 starting + 2 rewards
     assert user.repeatable_referral_claims == 2
 
 

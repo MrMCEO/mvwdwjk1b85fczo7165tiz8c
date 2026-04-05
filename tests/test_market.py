@@ -129,16 +129,16 @@ async def test_purchase_item_listing(session: AsyncSession):
     await session.refresh(item)
     assert item.owner_id == 8011
 
-    # Buyer paid price + 5% commission
+    # Buyer paid price + 5% commission (buyer was set to 500 via _give_bio)
     commission = max(1, round(price * SELL_COMMISSION_PCT))
     result = await session.execute(select(User).where(User.tg_id == 8011))
     buyer = result.scalar_one()
     assert buyer.bio_coins == 500 - price - commission
 
-    # Seller received the price
+    # Seller received the price (seller started with 500 new-player bonus)
     result = await session.execute(select(User).where(User.tg_id == 8010))
     seller = result.scalar_one()
-    assert seller.bio_coins == price
+    assert seller.bio_coins == 500 + price
 
 
 async def test_purchase_own_listing(session: AsyncSession):

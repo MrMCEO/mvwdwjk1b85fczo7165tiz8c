@@ -221,11 +221,16 @@ async def attack_player(
     if immunity is None:
         return False, "У жертвы ещё нет иммунитета.", None
 
+    # --- Load victim's virus upgrades (needed for min_balance calculation) ---
+    victim_virus, _ = await _load_virus_with_upgrades(session, victim_id)
+
     # --- Compute total levels for new formulas ---
-    # virus_level = sum of all virus branch levels
+    # virus_level = sum of all attacker's virus branch levels
     virus_level: int = sum(u.level for u in virus.upgrades)
-    # immunity_level = sum of all immunity branch levels
+    # immunity_level = sum of all defender's immunity branch levels
     immunity_level: int = sum(u.level for u in immunity.upgrades)
+    # victim_virus_total = sum of all victim's virus branch levels
+    victim_virus_total: int = sum(u.level for u in victim_virus.upgrades) if victim_virus else 0
 
     # --- STEALTH for detection notification logic ---
     stealth_effect = _upgrade_effect(virus_upgrades, VirusBranch.STEALTH)
@@ -309,7 +314,7 @@ async def attack_player(
     attacker.bio_coins += reward
 
     # Victim loses same amount (but not below their minimum balance)
-    victim_total_level = immunity_level  # victim's defence levels
+    victim_total_level = immunity_level + victim_virus_total  # victim's total upgrade levels
     victim_min_balance = -(victim_total_level * 500)
     victim.bio_coins = max(victim_min_balance, victim.bio_coins - reward)
 

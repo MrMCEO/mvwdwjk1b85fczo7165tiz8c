@@ -25,7 +25,7 @@ async def test_create_player(session: AsyncSession):
 
     assert user.tg_id == 1001
     assert user.username == "alice"
-    assert user.bio_coins == 0
+    assert user.bio_coins == 500  # new players start with 500 🧫 BioCoins
     assert user.premium_coins == 0
 
     # Virus exists with defaults
@@ -106,7 +106,7 @@ async def test_get_player_profile(session: AsyncSession):
     u = profile["user"]
     assert u["tg_id"] == 1005
     assert u["username"] == "eve"
-    assert u["bio_coins"] == 0
+    assert u["bio_coins"] == 500  # new players start with 500 🧫 BioCoins
     assert u["premium_coins"] == 0
 
     # Virus section

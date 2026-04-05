@@ -80,7 +80,13 @@ async def test_upgrade_not_enough_coins(session: AsyncSession):
     """Upgrade fails when player has insufficient bio_coins."""
     await create_player(session, tg_id=3002, username="poor1")
 
-    # No coins by default
+    # Drain coins to 0 so player can't afford the upgrade
+    from bot.models.user import User
+    result = await session.execute(select(User).where(User.tg_id == 3002))
+    user = result.scalar_one()
+    user.bio_coins = 0
+    await session.flush()
+
     success, msg = await upgrade_virus_branch(session, user_id=3002, branch="LETHALITY")
 
     assert success is False
@@ -141,9 +147,16 @@ async def test_upgrade_immunity_not_enough_coins(session: AsyncSession):
     """Immunity upgrade fails with no coins."""
     await create_player(session, tg_id=3011, username="poor_imm")
 
+    # Drain coins to 0 so player can't afford the upgrade
+    from bot.models.user import User
+    result = await session.execute(select(User).where(User.tg_id == 3011))
+    user = result.scalar_one()
+    user.bio_coins = 0
+    await session.flush()
+
     success, msg = await upgrade_immunity_branch(session, user_id=3011, branch="BARRIER")
     assert success is False
-    assert "Недостаточно" in msg
+    assert "Недostаточно" in msg or "Недостаточно" in msg
 
 
 async def test_get_virus_stats(session: AsyncSession):

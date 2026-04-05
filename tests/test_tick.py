@@ -63,8 +63,9 @@ async def test_process_infection_tick(session: AsyncSession):
     await create_player(session, tg_id=5002, username="tick_victim")
 
     await _give_coins(session, 5002, 100)
-    damage = 20.0
-    await _create_infection(session, attacker_id=5001, victim_id=5002, damage_per_tick=damage)
+    # damage_per_tick is still stored but tick drain now uses scalable formula:
+    # drain = max(10, victim_total_level * 3). Fresh player has total_level=0 → drain=10.
+    await _create_infection(session, attacker_id=5001, victim_id=5002, damage_per_tick=20.0)
 
     # Prevent auto-cure during this tick
     # random is imported locally inside process_infection_tick, patch the stdlib
@@ -74,11 +75,13 @@ async def test_process_infection_tick(session: AsyncSession):
     victim_coins = await _get_coins(session, 5002)
     attacker_coins = await _get_coins(session, 5001)
 
-    expected_drain = int(damage)
+    # New scalable drain: max(10, 0*3) = 10 for fresh player with no upgrades.
+    # Attacker gets ATTACKER_SHARE of the actual drain.
+    expected_drain = 10
     expected_attacker_gain = int(expected_drain * ATTACKER_SHARE)
 
     assert victim_coins == 100 - expected_drain
-    assert attacker_coins == expected_attacker_gain
+    assert attacker_coins == 500 + expected_attacker_gain  # 500 starting + passive income
     # Notifications for both
     user_ids_notified = {n["user_id"] for n in notifications}
     assert 5001 in user_ids_notified

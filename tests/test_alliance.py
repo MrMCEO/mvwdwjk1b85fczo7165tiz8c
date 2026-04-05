@@ -37,7 +37,8 @@ async def test_create_alliance(session: AsyncSession):
 async def test_create_alliance_not_enough_coins(session: AsyncSession):
     """Creating an alliance without enough coins fails."""
     await create_player(session, tg_id=6002, username="poorleader")
-    # Leave bio_coins at 0
+    # Explicitly zero out coins — new players start with 500 which may be enough
+    await _give_coins(session, 6002, 0)
 
     ok, msg = await create_alliance(session, leader_id=6002, name="Beta Squad", tag="BETA")
     assert ok is False

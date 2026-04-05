@@ -44,7 +44,7 @@ async def test_convert_premium_to_bio(session: AsyncSession):
 
     user = await _get_user(session, 6001)
     assert user.premium_coins == 5
-    assert user.bio_coins == 5 * EXCHANGE_RATE
+    assert user.bio_coins == 500 + 5 * EXCHANGE_RATE  # 500 starting + converted amount
 
 
 async def test_convert_not_enough_premium(session: AsyncSession):
@@ -121,4 +121,4 @@ async def test_convert_full_balance(session: AsyncSession):
     assert success is True
     user = await _get_user(session, 6020)
     assert user.premium_coins == 0
-    assert user.bio_coins == 7 * EXCHANGE_RATE
+    assert user.bio_coins == 500 + 7 * EXCHANGE_RATE  # 500 starting + converted amount

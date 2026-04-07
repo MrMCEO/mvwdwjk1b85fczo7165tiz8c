@@ -28,14 +28,11 @@ def _fmt_immunity_stats(data: dict) -> str:
     im = data["immunity"]
     upgrades = data["upgrades"]
 
-    detection_bonus = upgrades.get("DETECTION", {}).get("effect_value", 0.0)
-    total_detection = im["detection_power"] + detection_bonus
-
     lines = [
         "🛡 <b>Мой иммунитет</b>\n",
         f"⭐ Уровень: <code>{dlvl(im['level'])}</code>",
         f"🔰 Сопротивляемость: <code>{im['resistance']}</code>  │  "
-        f"🔍 Детекция: <code>{total_detection:.2f}</code>",
+        f"🔍 Детекция: <code>{im['detection_power']:.2f}</code>",
         "",
         "━━━━━━━━━━━━━━━",
         "<b>Ветки прокачки:</b>",

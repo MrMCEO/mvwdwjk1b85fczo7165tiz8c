@@ -435,13 +435,17 @@ async def get_immunity_stats(session: AsyncSession, user_id: int) -> dict:
             "next_cost": next_cost,
         }
 
+    barrier_bonus = upgrades.get("BARRIER", {}).get("effect_value", 0.0)
+    detection_bonus = upgrades.get("DETECTION", {}).get("effect_value", 0.0)
+    regen_bonus = upgrades.get("REGENERATION", {}).get("effect_value", 0.0)
+
     return {
         "immunity": {
             "id": immunity.id,
             "level": immunity.level,
-            "resistance": immunity.resistance,
-            "detection_power": immunity.detection_power,
-            "recovery_speed": immunity.recovery_speed,
+            "resistance": immunity.resistance + barrier_bonus,
+            "detection_power": immunity.detection_power + detection_bonus,
+            "recovery_speed": immunity.recovery_speed + regen_bonus,
         },
         "upgrades": upgrades,
     }

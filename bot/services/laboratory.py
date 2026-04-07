@@ -409,11 +409,14 @@ async def spy_on_player(
         im_upgrades: dict[str, dict] = {}
         for u in im.upgrades:
             im_upgrades[u.branch.value] = {"level": u.level, "effect_value": u.effect_value}
+        barrier_bonus = im_upgrades.get("BARRIER", {}).get("effect_value", 0.0)
+        detection_bonus = im_upgrades.get("DETECTION", {}).get("effect_value", 0.0)
+        regen_bonus = im_upgrades.get("REGENERATION", {}).get("effect_value", 0.0)
         immunity_data = {
             "level": im.level,
-            "resistance": im.resistance,
-            "detection_power": im.detection_power,
-            "recovery_speed": im.recovery_speed,
+            "resistance": im.resistance + barrier_bonus,
+            "detection_power": im.detection_power + detection_bonus,
+            "recovery_speed": im.recovery_speed + regen_bonus,
             "upgrades": im_upgrades,
         }
 

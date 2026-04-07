@@ -29,7 +29,7 @@ from bot.services.laboratory import (
     spy_on_player,
     use_item,
 )
-from bot.utils.chat import smart_reply
+from bot.utils.chat import dlvl, smart_reply
 from bot.utils.emoji import render_virus_name
 
 router = Router(name="laboratory")
@@ -255,14 +255,14 @@ async def fsm_spy_target(
     # Вирус ветки
     v_upgrades = virus.get("upgrades", {})
     v_branches = "\n".join(
-        f"  • {branch}: ур. <code>{info['level']}</code>"
+        f"  • {branch}: ур. <code>{dlvl(info['level'])}</code>"
         for branch, info in v_upgrades.items()
     ) or "  <i>нет данных</i>"
 
     # Иммунитет ветки
     im_upgrades = immunity.get("upgrades", {})
     im_branches = "\n".join(
-        f"  • {branch}: ур. <code>{info['level']}</code>"
+        f"  • {branch}: ур. <code>{dlvl(info['level'])}</code>"
         for branch, info in im_upgrades.items()
     ) or "  <i>нет данных</i>"
 
@@ -272,12 +272,12 @@ async def fsm_spy_target(
         f"🦠 Активных заражений: <code>{data['active_infections']}</code>\n\n"
         f"🦠 <b>Вирус</b>\n"
         f"  Имя: {render_virus_name(virus.get('name', '—'), virus.get('name_entities_json'))}\n"
-        f"  Уровень: <code>{virus.get('level', '—')}</code>\n"
+        f"  Уровень: <code>{dlvl(virus.get('level', '—'))}</code>\n"
         f"  Атака: <code>{virus.get('attack_power', '—')}</code>\n"
         f"  Заразность: <code>{virus.get('spread_rate', '—')}</code>\n"
         f"  Ветки прокачки:\n{v_branches}\n\n"
         f"🛡 <b>Иммунитет</b>\n"
-        f"  Уровень: <code>{immunity.get('level', '—')}</code>\n"
+        f"  Уровень: <code>{dlvl(immunity.get('level', '—'))}</code>\n"
         f"  Сопротивление: <code>{immunity.get('resistance', '—')}</code>\n"
         f"  Обнаружение: <code>{immunity.get('detection_power', '—')}</code>\n"
         f"  Регенерация: <code>{immunity.get('recovery_speed', '—')}</code>\n"

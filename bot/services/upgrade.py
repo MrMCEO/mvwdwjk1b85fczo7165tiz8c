@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade
+from bot.utils.chat import dlvl
 from bot.models.resource import (
     Currency as CurrencyType,
 )
@@ -242,7 +243,7 @@ async def upgrade_virus_branch(
     new_level = upgrade.level
     next_cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], new_level)
     return True, (
-        f"Ветка «{branch_name}» прокачана до уровня {new_level}! "
+        f"Ветка «{branch_name}» прокачана до уровня {dlvl(new_level)}! "
         f"Эффект: {upgrade.effect_value:.2f}. "
         f"Потрачено: {cost} 🧫 BioCoins. Следующий уровень: {next_cost} 🧫 BioCoins."
     )
@@ -338,7 +339,7 @@ async def upgrade_immunity_branch(
     new_level = upgrade.level
     next_cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], new_level)
     return True, (
-        f"Ветка «{branch_name}» прокачана до уровня {new_level}! "
+        f"Ветка «{branch_name}» прокачана до уровня {dlvl(new_level)}! "
         f"Эффект: {upgrade.effect_value:.2f}. "
         f"Потрачено: {cost} 🧫 BioCoins. Следующий уровень: {next_cost} 🧫 BioCoins."
     )

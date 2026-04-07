@@ -69,7 +69,7 @@ from bot.services.alliance import (
     upgrade_alliance,
 )
 from bot.services.resource import get_balance
-from bot.utils.chat import smart_reply
+from bot.utils.chat import dlvl, smart_reply
 
 router = Router(name="alliance")
 
@@ -383,8 +383,8 @@ async def cb_ally_member_detail(
     text = (
         f"👤 <b>{uname}</b>\n"
         f"🏅 Роль: <b>{role_label}</b>\n"
-        f"🦠 Вирус ур. <b>{virus_lvl}</b>\n"
-        f"🛡 Иммунитет ур. <b>{immunity_lvl}</b>"
+        f"🦠 Вирус ур. <b>{dlvl(virus_lvl)}</b>\n"
+        f"🛡 Иммунитет ур. <b>{dlvl(immunity_lvl)}</b>"
     )
 
     # Determine which page the member is on (page_size=8)
@@ -858,12 +858,12 @@ def _fmt_upgrades_text(info: dict, upgrades: dict) -> str:
 
         if level >= data["max_level"]:
             lines.append(
-                f"{cfg['emoji']} {cfg['name']}: ур. <code>{level}</code> ({effect_str}) — <i>макс.</i>"
+                f"{cfg['emoji']} {cfg['name']}: ур. <code>{dlvl(level)}</code> ({effect_str}) — <i>макс.</i>"
             )
         else:
             lines.append(
-                f"{cfg['emoji']} {cfg['name']}: ур. <code>{level}</code> ({effect_str}) "
-                f"→ ур. <code>{level + 1}</code> стоит <code>{next_cost}</code> 🔷"
+                f"{cfg['emoji']} {cfg['name']}: ур. <code>{dlvl(level)}</code> ({effect_str}) "
+                f"→ ур. <code>{dlvl(level + 1)}</code> стоит <code>{next_cost}</code> 🔷"
             )
 
     return "\n".join(lines)

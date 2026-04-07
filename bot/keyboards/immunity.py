@@ -4,6 +4,8 @@ from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from bot.utils.chat import dlvl
+
 _BRANCH_LABELS = {
     "BARRIER":      ("🛡", "Барьер"),
     "DETECTION":    ("🔍", "Детекция"),
@@ -28,7 +30,7 @@ def immunity_menu_kb(upgrades: dict | None = None) -> InlineKeyboardMarkup:
             lvl = info.get("level", 0)
             cost = info.get("next_cost")
             if cost is None:
-                btn_text = f"{icon} {name} [Ур.{lvl}] МАКС"
+                btn_text = f"{icon} {name} [Ур.{dlvl(lvl)}] МАКС"
             else:
                 btn_text = f"{icon} {name} ⬆️ {cost}🧫"
         else:

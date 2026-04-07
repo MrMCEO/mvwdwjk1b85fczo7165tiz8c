@@ -18,6 +18,7 @@ from bot.services.rating import (
     get_top_richest,
     get_top_virus_level,
 )
+from bot.utils.chat import dlvl
 from bot.utils.emoji import render_virus_name
 
 router = Router(name="rating")
@@ -127,7 +128,7 @@ async def cb_rating_virus(callback: CallbackQuery, session: AsyncSession) -> Non
                 row.get("virus_name_entities"),
             )
             lines.append(
-                f"{_place(i)} {display} — ур. <code>{row['level']}</code>"
+                f"{_place(i)} {display} — ур. <code>{dlvl(row['level'])}</code>"
                 f" (<i>{virus_name}</i>)"
             )
         lines.append("")
@@ -152,7 +153,7 @@ async def cb_rating_immunity(callback: CallbackQuery, session: AsyncSession) -> 
         lines = ["🛡 <b>Топ по уровню иммунитета</b>\n"]
         for i, row in enumerate(rows, start=1):
             display = _fmt_row_username(row)
-            lines.append(f"{_place(i)} {display} — ур. <code>{row['level']}</code>")
+            lines.append(f"{_place(i)} {display} — ур. <code>{dlvl(row['level'])}</code>")
         lines.append("")
         lines.append(f"<i>Показаны топ-{len(rows)} игроков</i>")
         text = "\n".join(lines)

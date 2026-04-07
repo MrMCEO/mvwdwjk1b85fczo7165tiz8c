@@ -29,6 +29,7 @@ from bot.models.immunity import Immunity
 from bot.models.resource import Currency, ResourceTransaction, TransactionReason
 from bot.models.user import User
 from bot.models.virus import Virus
+from bot.utils.chat import dlvl
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -863,7 +864,7 @@ async def upgrade_alliance(
 
     if current_level >= cfg["max_level"]:
         return False, (
-            f"❌ {cfg['emoji']} {cfg['name']} уже на максимальном уровне ({cfg['max_level']})."
+            f"❌ {cfg['emoji']} {cfg['name']} уже на максимальном уровне ({dlvl(cfg['max_level'])})."
         )
 
     cost = _upgrade_cost(cfg, current_level)
@@ -888,7 +889,7 @@ async def upgrade_alliance(
         effect_str = f"+{effect * 100:.0f}%"
 
     return True, (
-        f"✅ {cfg['emoji']} <b>{cfg['name']}</b> прокачан до уровня <b>{new_level}</b>!\n"
+        f"✅ {cfg['emoji']} <b>{cfg['name']}</b> прокачан до уровня <b>{dlvl(new_level)}</b>!\n"
         f"Эффект: {effect_str}\n"
         f"Потрачено: {cost} 🔷\n"
         f"Остаток в казне: {alliance.alliance_coins} 🔷"

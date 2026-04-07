@@ -41,6 +41,10 @@ from bot.services.premium import get_attack_cooldown, get_attack_limits
 # Base damage per tick before lethality adjustments
 BASE_DAMAGE_PER_TICK: float = 5.0
 
+# Virus names that are considered "not custom" — used to decide whether to show
+# the virus name in attack/infection messages.
+_NON_CUSTOM: frozenset[str] = frozenset({"", "—", DEFAULT_VIRUS_NAME})
+
 # Cure cost = damage_per_tick * this multiplier (rounded up).
 # Lowered from 10 to 8: at base dmg 5, cure = 40 coins. Comparable to expected loss
 # of waiting (~5 dmg * ~5 ticks avg = 25), so manual cure is worth it when urgent.
@@ -369,9 +373,10 @@ async def attack_player(
     from bot.services.event import track_activity
     await track_activity(session, attacker_id, "attack")
 
-    # Virus display suffix — shown only when a custom name is set
+    # Virus display suffix — shown only when a custom name is set.
+    # Default/unset names: None, empty string, "—" (em-dash placeholder), or DEFAULT_VIRUS_NAME.
     virus_display = ""
-    if virus.name and virus.name != DEFAULT_VIRUS_NAME:
+    if virus.name and virus.name not in _NON_CUSTOM:
         virus_display = f" вирусом «{escape(virus.name)}»"
 
     victim_display = escape(victim.username or str(victim_id))

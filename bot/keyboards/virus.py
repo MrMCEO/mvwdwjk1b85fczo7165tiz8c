@@ -4,6 +4,8 @@ from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from bot.utils.chat import dlvl
+
 # Human-readable branch labels with emoji
 _BRANCH_LABELS = {
     "LETHALITY": ("☠️", "Летальность"),
@@ -31,7 +33,7 @@ def virus_menu_kb(upgrades: dict | None = None) -> InlineKeyboardMarkup:
             lvl = info.get("level", 0)
             cost = info.get("next_cost")
             if cost is None:
-                btn_text = f"{icon} {name} [Ур.{lvl}] МАКС"
+                btn_text = f"{icon} {name} [Ур.{dlvl(lvl)}] МАКС"
             else:
                 btn_text = f"{icon} {name} ⬆️ {cost}🧫"
         else:

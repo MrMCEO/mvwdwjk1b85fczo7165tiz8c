@@ -24,7 +24,7 @@ from bot.services.combat import (
     try_cure,
 )
 from bot.services.notifications import should_notify
-from bot.utils.chat import smart_reply
+from bot.utils.chat import dlvl, smart_reply
 from bot.utils.throttle import check_throttle
 
 router = Router(name="attack")
@@ -119,8 +119,8 @@ async def msg_attack_username(
         message,
         f"⚔️ <b>Подтверждение атаки</b>\n\n"
         f"🎯 Цель: <b>{target_display}</b>\n"
-        f"🦠 Вирус цели: ур. <code>{virus_level}</code>\n"
-        f"🛡 Иммунитет цели: ур. <code>{immunity_level}</code>\n\n"
+        f"🦠 Вирус цели: ур. <code>{dlvl(virus_level)}</code>\n"
+        f"🛡 Иммунитет цели: ур. <code>{dlvl(immunity_level)}</code>\n\n"
         "<i>Атаковать?</i>",
         reply_markup=attack_confirm_kb(target.tg_id),
     )
@@ -164,8 +164,8 @@ async def cb_random_attack(
     await callback.message.edit_text(
         f"⚔️ <b>Подтверждение атаки</b>\n\n"
         f"🎯 Цель: <b>{target_display}</b>\n"
-        f"🦠 Вирус цели: ур. <code>{virus_level}</code>\n"
-        f"🛡 Иммунитет цели: ур. <code>{immunity_level}</code>\n\n"
+        f"🦠 Вирус цели: ур. <code>{dlvl(virus_level)}</code>\n"
+        f"🛡 Иммунитет цели: ур. <code>{dlvl(immunity_level)}</code>\n\n"
         "<i>Атаковать?</i>",
         reply_markup=attack_confirm_kb(target.tg_id),
         parse_mode="HTML",

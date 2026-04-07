@@ -16,7 +16,7 @@ from bot.keyboards.virus import virus_menu_kb
 from bot.models.virus import Virus
 from bot.services.premium import get_virus_name_limit
 from bot.services.upgrade import get_virus_stats, upgrade_virus_branch
-from bot.utils.chat import smart_reply
+from bot.utils.chat import dlvl, smart_reply
 from bot.utils.emoji import render_virus_name
 from bot.utils.throttle import check_throttle
 
@@ -53,7 +53,7 @@ def _fmt_virus_stats(data: dict) -> str:
     lines = [
         "🦠 <b>Мой вирус</b>\n",
         f"📛 Имя: <b>{display_name}</b>",
-        f"⭐ Уровень: <code>{total_level}</code>",
+        f"⭐ Уровень: <code>{dlvl(total_level)}</code>",
         "",
         "━━━━━━━━━━━━━━━",
         "<b>Ветки прокачки:</b>",
@@ -65,7 +65,7 @@ def _fmt_virus_stats(data: dict) -> str:
         next_cost = info.get("next_cost")
         cost_text = "<i>макс.</i>" if next_cost is None else f"<code>{next_cost}</code> 🧫"
         lines.append(
-            f"{icon} {info['name']}: ур. <code>{info['level']}</code>  │  {cost_text}"
+            f"{icon} {info['name']}: ур. <code>{dlvl(info['level'])}</code>  │  {cost_text}"
         )
 
     lines += ["", "<i>Нажми кнопку ниже для прокачки ветки</i>"]

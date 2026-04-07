@@ -7,12 +7,19 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
+import os
+
 # Import project models so their tables are registered on Base.metadata
 import bot.models  # noqa: F401
 from bot.models.base import Base
 
 # Alembic Config object
 config = context.config
+
+# Override sqlalchemy.url with DB_URL env var if set (for Docker)
+db_url = os.environ.get("DB_URL")
+if db_url:
+    config.set_main_option("sqlalchemy.url", db_url)
 
 # Set up Python logging from alembic.ini
 if config.config_file_name is not None:

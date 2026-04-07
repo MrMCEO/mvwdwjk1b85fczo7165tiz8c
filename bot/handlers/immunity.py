@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.immunity import immunity_menu_kb
 from bot.services.upgrade import get_immunity_stats, upgrade_immunity_branch
+from bot.utils.chat import dlvl
 from bot.utils.throttle import check_throttle
 
 router = Router(name="immunity")
@@ -29,7 +30,7 @@ def _fmt_immunity_stats(data: dict) -> str:
 
     lines = [
         "🛡 <b>Мой иммунитет</b>\n",
-        f"⭐ Уровень: <code>{im['level']}</code>",
+        f"⭐ Уровень: <code>{dlvl(im['level'])}</code>",
         f"🔰 Сопротивляемость: <code>{im['resistance']}</code>  │  "
         f"🔍 Детекция: <code>{im['detection_power']:.2f}</code>",
         "",
@@ -43,7 +44,7 @@ def _fmt_immunity_stats(data: dict) -> str:
         next_cost = info.get("next_cost")
         cost_text = "<i>макс.</i>" if next_cost is None else f"<code>{next_cost}</code> 🧫"
         lines.append(
-            f"{icon} {info['name']}: ур. <code>{info['level']}</code>  │  {cost_text}"
+            f"{icon} {info['name']}: ур. <code>{dlvl(info['level'])}</code>  │  {cost_text}"
         )
 
     lines += ["", "<i>Нажми кнопку ниже для прокачки ветки</i>"]

@@ -8,6 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.models.alliance import PRIVACY_LABELS, AlliancePrivacy, AllianceRole
 from bot.services.alliance import ALLIANCE_UPGRADE_CONFIG
+from bot.utils.chat import dlvl
 
 
 def alliance_no_clan_kb() -> InlineKeyboardMarkup:
@@ -151,7 +152,7 @@ def alliance_members_kb(
         virus_lvl = m.get("virus_level", 0)
 
         builder.button(
-            text=f"{role_icon} {uname} (ур. {virus_lvl})",
+            text=f"{role_icon} {uname} (ур. {dlvl(virus_lvl)})",
             callback_data=f"ally_member_{uid}",
         )
 
@@ -302,11 +303,11 @@ def alliance_upgrades_kb(
         max_level = data["max_level"]
 
         if level >= max_level:
-            label = f"{cfg['emoji']} {cfg['name']}: МАКС ({max_level})"
+            label = f"{cfg['emoji']} {cfg['name']}: МАКС ({dlvl(max_level)})"
         else:
             next_cost = data["next_cost"]
             can_afford = "✅" if balance >= next_cost else "❌"
-            label = f"{can_afford} {cfg['emoji']} {cfg['name']}: ур.{level} → {next_cost} 🔷"
+            label = f"{can_afford} {cfg['emoji']} {cfg['name']}: ур.{dlvl(level)} → {next_cost} 🔷"
 
         builder.button(text=label, callback_data=f"alliance_upgrade_{key}")
 

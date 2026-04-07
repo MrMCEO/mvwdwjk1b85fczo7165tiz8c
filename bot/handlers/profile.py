@@ -16,7 +16,7 @@ from bot.keyboards.profile import log_pagination_kb, profile_kb
 from bot.services.activity import get_attack_log, get_transaction_log
 from bot.services.player import get_player_profile
 from bot.services.premium import clear_display_name, format_username, set_display_name
-from bot.utils.chat import smart_reply
+from bot.utils.chat import dlvl, smart_reply
 from bot.utils.emoji import render_virus_name
 
 
@@ -62,8 +62,8 @@ def _fmt_profile(data: dict) -> str:
     )
 
     virus_name = render_virus_name(v.get("name", "—"), v.get("name_entities_json"))
-    virus_level = v.get("level", "—")
-    immunity_level = im.get("level", "—")
+    virus_level = dlvl(v["level"]) if "level" in v else "—"
+    immunity_level = dlvl(im["level"]) if "level" in im else "—"
 
     sent = data.get("infections_sent_count", 0)
     received = data.get("infections_received_count", 0)

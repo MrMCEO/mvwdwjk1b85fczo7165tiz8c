@@ -1,0 +1,32 @@
+# Git / VCS
+.git/
+.gitignore
+
+# Dev environment
+.venv/
+.env
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# Dev-only files
+tests/
+plan.md
+CLAUDE.md
+design_example/
+scripts/
+pyproject.toml
+
+# Data / DB
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

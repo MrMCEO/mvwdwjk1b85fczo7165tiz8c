@@ -63,7 +63,7 @@ from bot.services.promo import (
     get_promo_info,
     list_promos,
 )
-from bot.utils.chat import smart_reply
+from bot.utils.chat import dlvl, smart_reply
 
 logger = logging.getLogger(__name__)
 router = Router(name="admin")
@@ -138,9 +138,9 @@ def _fmt_player_card(data: dict) -> str:
         for branch in ("LETHALITY", "CONTAGION", "STEALTH"):
             lvl = upgrades.get(branch, {}).get("level", 0)
             emoji = _BRANCH_EMOJI.get(branch, "")
-            upg_parts.append(f"{emoji} <code>{lvl}</code>")
+            upg_parts.append(f"{emoji} <code>{dlvl(lvl)}</code>")
         lines.append(
-            f"🦠 Вирус ур.<b>{v.get('level', 1)}</b>"
+            f"🦠 Вирус ур.<b>{dlvl(v.get('level', 0))}</b>"
             f"  <i>атака <code>{v.get('attack_power', 10)}</code>,"
             f" заразность <code>{v.get('spread_rate', 1.0):.2f}</code></i>"
         )
@@ -153,9 +153,9 @@ def _fmt_player_card(data: dict) -> str:
         for branch in ("BARRIER", "DETECTION", "REGENERATION"):
             lvl = upgrades.get(branch, {}).get("level", 0)
             emoji = _BRANCH_EMOJI.get(branch, "")
-            upg_parts.append(f"{emoji} <code>{lvl}</code>")
+            upg_parts.append(f"{emoji} <code>{dlvl(lvl)}</code>")
         lines.append(
-            f"🛡 Иммунитет ур.<b>{im.get('level', 1)}</b>"
+            f"🛡 Иммунитет ур.<b>{dlvl(im.get('level', 0))}</b>"
             f"  <i>сопр. <code>{im.get('resistance', 10)}</code></i>"
         )
         if upg_parts:

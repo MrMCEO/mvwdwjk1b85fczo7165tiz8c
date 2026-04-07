@@ -48,6 +48,9 @@ logger = logging.getLogger(__name__)
 
 TICK_INTERVAL_MINUTES: int = 60
 
+# Virus names that are considered "not custom" — mirrors the same set in combat.py.
+_NON_CUSTOM: frozenset[str] = frozenset({"", "—", DEFAULT_VIRUS_NAME})
+
 # Attacker receives this fraction of stolen bio_coins.
 # Lowered from 70% to 50%: attacking is still profitable but not a
 # gold mine. Victim loses 5/tick, attacker gains 2.5/tick at base.
@@ -179,11 +182,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
 
             # Build victim drain notification with optional custom virus name
             attacker_virus = getattr(attacker, "virus", None)
-            if (
-                attacker_virus is not None
-                and attacker_virus.name
-                and attacker_virus.name != DEFAULT_VIRUS_NAME
-            ):
+            if attacker_virus is not None and attacker_virus.name not in _NON_CUSTOM:
                 drain_msg = (
                     f"🦠 Вирус «{escape(attacker_virus.name)}» "
                     f"забрал у вас {actual_drain} 🧫 BioCoins"

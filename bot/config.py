@@ -8,12 +8,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_ignore_empty=True,
         case_sensitive=False,
     )
 
     bot_token: str
     admin_ids: list[int] = []
-    db_url: str = "postgresql+asyncpg://biowars_user:biowars_dev@localhost/biowars"
+    db_url: str = "postgresql+asyncpg://bothost_db_f856fb47afb1:sww8k3UMA_XkaJper6w4HyX1UARVG15toVC7lCnfkAg@node1.pghost.ru:15540/bothost_db_f856fb47afb1"
 
     @field_validator("admin_ids", mode="before")
     @classmethod

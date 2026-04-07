@@ -52,11 +52,13 @@ class Event(Base):
         "PandemicParticipant",
         back_populates="event",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     event_participants: Mapped[list[EventParticipant]] = relationship(
         "EventParticipant",
         back_populates="event",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:
@@ -89,7 +91,7 @@ class PandemicParticipant(Base):
     )
 
     # Relationships
-    event: Mapped[Event] = relationship("Event", back_populates="pandemic_participants")
+    event: Mapped[Event] = relationship("Event", back_populates="pandemic_participants", lazy="selectin")
 
     def __repr__(self) -> str:
         return (
@@ -121,7 +123,7 @@ class EventParticipant(Base):
     )
 
     # Relationships
-    event: Mapped[Event] = relationship("Event", back_populates="event_participants")
+    event: Mapped[Event] = relationship("Event", back_populates="event_participants", lazy="selectin")
 
     def __repr__(self) -> str:
         return (

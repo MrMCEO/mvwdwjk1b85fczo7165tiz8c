@@ -80,12 +80,12 @@ class Alliance(Base):
     regen_level: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     members: Mapped[list[AllianceMember]] = relationship(
-        back_populates="alliance", cascade="all, delete-orphan"
+        back_populates="alliance", cascade="all, delete-orphan", lazy="selectin"
     )
     join_requests: Mapped[list[AllianceJoinRequest]] = relationship(
-        back_populates="alliance", cascade="all, delete-orphan"
+        back_populates="alliance", cascade="all, delete-orphan", lazy="selectin"
     )
-    leader: Mapped[User] = relationship("User", foreign_keys=[leader_id])
+    leader: Mapped[User] = relationship("User", foreign_keys=[leader_id], lazy="selectin")
 
     def __repr__(self) -> str:
         return f"<Alliance id={self.id} name={self.name!r} tag={self.tag!r}>"
@@ -106,8 +106,8 @@ class AllianceMember(Base):
     )
     joined_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    alliance: Mapped[Alliance] = relationship(back_populates="members")
-    user: Mapped[User] = relationship("User")
+    alliance: Mapped[Alliance] = relationship(back_populates="members", lazy="selectin")
+    user: Mapped[User] = relationship("User", lazy="selectin")
 
     def __repr__(self) -> str:
         return (
@@ -133,8 +133,8 @@ class AllianceJoinRequest(Base):
         Enum(JoinRequestStatus), default=JoinRequestStatus.PENDING
     )
 
-    alliance: Mapped[Alliance] = relationship(back_populates="join_requests")
-    user: Mapped[User] = relationship("User")
+    alliance: Mapped[Alliance] = relationship(back_populates="join_requests", lazy="selectin")
+    user: Mapped[User] = relationship("User", lazy="selectin")
 
     def __repr__(self) -> str:
         return (

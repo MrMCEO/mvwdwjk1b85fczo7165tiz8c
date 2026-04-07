@@ -46,7 +46,7 @@ class ResourceTransaction(Base):
     )
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="transactions")
+    user: Mapped["User"] = relationship("User", back_populates="transactions", lazy="selectin")
 
     def __repr__(self) -> str:
         return (

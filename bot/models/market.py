@@ -75,10 +75,10 @@ class MarketListing(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
-    seller: Mapped[User] = relationship("User", foreign_keys=[seller_id])
-    buyer: Mapped[User] = relationship("User", foreign_keys=[buyer_id])
-    item: Mapped[Item | None] = relationship("Item", foreign_keys=[item_id])
-    mutation: Mapped[Mutation | None] = relationship("Mutation", foreign_keys=[mutation_id])
+    seller: Mapped[User] = relationship("User", foreign_keys=[seller_id], lazy="selectin")
+    buyer: Mapped[User] = relationship("User", foreign_keys=[buyer_id], lazy="selectin")
+    item: Mapped[Item | None] = relationship("Item", foreign_keys=[item_id], lazy="selectin")
+    mutation: Mapped[Mutation | None] = relationship("Mutation", foreign_keys=[mutation_id], lazy="selectin")
 
     def __repr__(self) -> str:
         return (

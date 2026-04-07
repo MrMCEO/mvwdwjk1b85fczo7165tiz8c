@@ -66,7 +66,7 @@ class Item(Base):
     effect_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
-    owner: Mapped[User] = relationship("User", back_populates="items")
+    owner: Mapped[User] = relationship("User", back_populates="items", lazy="selectin")
 
     def __repr__(self) -> str:
         return (

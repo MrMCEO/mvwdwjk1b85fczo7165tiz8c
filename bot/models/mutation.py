@@ -62,7 +62,7 @@ class Mutation(Base):
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     # Relationships
-    owner: Mapped[User] = relationship("User", back_populates="mutations")
+    owner: Mapped[User] = relationship("User", back_populates="mutations", lazy="selectin")
 
     def __repr__(self) -> str:
         return (

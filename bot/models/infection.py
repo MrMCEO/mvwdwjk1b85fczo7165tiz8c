@@ -28,10 +28,10 @@ class Infection(Base):
 
     # Relationships
     attacker: Mapped["User"] = relationship(
-        "User", foreign_keys=[attacker_id], back_populates="infections_sent"
+        "User", foreign_keys=[attacker_id], back_populates="infections_sent", lazy="selectin"
     )
     victim: Mapped["User"] = relationship(
-        "User", foreign_keys=[victim_id], back_populates="infections_received"
+        "User", foreign_keys=[victim_id], back_populates="infections_received", lazy="selectin"
     )
 
     def __repr__(self) -> str:

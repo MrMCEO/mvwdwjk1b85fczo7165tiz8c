@@ -29,9 +29,9 @@ class Immunity(Base):
     recovery_speed: Mapped[float] = mapped_column(Float, default=0.03, server_default="0.03")  # balanced: was 0.1, too high base auto-cure
 
     # Relationships
-    owner: Mapped["User"] = relationship("User", back_populates="immunity")
+    owner: Mapped["User"] = relationship("User", back_populates="immunity", lazy="selectin")
     upgrades: Mapped[list["ImmunityUpgrade"]] = relationship(
-        "ImmunityUpgrade", back_populates="immunity", cascade="all, delete-orphan"
+        "ImmunityUpgrade", back_populates="immunity", cascade="all, delete-orphan", lazy="selectin"
     )
 
     def __repr__(self) -> str:
@@ -50,7 +50,7 @@ class ImmunityUpgrade(Base):
     effect_value: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0")
 
     # Relationships
-    immunity: Mapped["Immunity"] = relationship("Immunity", back_populates="upgrades")
+    immunity: Mapped["Immunity"] = relationship("Immunity", back_populates="upgrades", lazy="selectin")
 
     def __repr__(self) -> str:
         return f"<ImmunityUpgrade id={self.id} branch={self.branch} level={self.level}>"

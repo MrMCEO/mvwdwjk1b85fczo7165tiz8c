@@ -31,9 +31,9 @@ class Virus(Base):
     mutation_points: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     # Relationships
-    owner: Mapped["User"] = relationship("User", back_populates="virus")
+    owner: Mapped["User"] = relationship("User", back_populates="virus", lazy="selectin")
     upgrades: Mapped[list["VirusUpgrade"]] = relationship(
-        "VirusUpgrade", back_populates="virus", cascade="all, delete-orphan"
+        "VirusUpgrade", back_populates="virus", cascade="all, delete-orphan", lazy="selectin"
     )
 
     def __repr__(self) -> str:
@@ -52,7 +52,7 @@ class VirusUpgrade(Base):
     effect_value: Mapped[float] = mapped_column(Float, default=0.0, server_default="0.0")
 
     # Relationships
-    virus: Mapped["Virus"] = relationship("Virus", back_populates="upgrades")
+    virus: Mapped["Virus"] = relationship("Virus", back_populates="upgrades", lazy="selectin")
 
     def __repr__(self) -> str:
         return f"<VirusUpgrade id={self.id} branch={self.branch} level={self.level}>"

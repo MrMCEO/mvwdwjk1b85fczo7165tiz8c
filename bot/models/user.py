@@ -58,31 +58,33 @@ class User(Base):
 
     # Relationships
     virus: Mapped["Virus"] = relationship(
-        "Virus", back_populates="owner", uselist=False, cascade="all, delete-orphan"
+        "Virus", back_populates="owner", uselist=False, cascade="all, delete-orphan", lazy="selectin"
     )
     immunity: Mapped["Immunity"] = relationship(
-        "Immunity", back_populates="owner", uselist=False, cascade="all, delete-orphan"
+        "Immunity", back_populates="owner", uselist=False, cascade="all, delete-orphan", lazy="selectin"
     )
     infections_sent: Mapped[list["Infection"]] = relationship(
         "Infection",
         foreign_keys="Infection.attacker_id",
         back_populates="attacker",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     infections_received: Mapped[list["Infection"]] = relationship(
         "Infection",
         foreign_keys="Infection.victim_id",
         back_populates="victim",
         cascade="all, delete-orphan",
+        lazy="selectin",
     )
     transactions: Mapped[list["ResourceTransaction"]] = relationship(
-        "ResourceTransaction", back_populates="user", cascade="all, delete-orphan"
+        "ResourceTransaction", back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
     mutations: Mapped[list["Mutation"]] = relationship(
-        "Mutation", back_populates="owner", cascade="all, delete-orphan"
+        "Mutation", back_populates="owner", cascade="all, delete-orphan", lazy="selectin"
     )
     items: Mapped[list["Item"]] = relationship(
-        "Item", back_populates="owner", cascade="all, delete-orphan"
+        "Item", back_populates="owner", cascade="all, delete-orphan", lazy="selectin"
     )
 
     def __repr__(self) -> str:

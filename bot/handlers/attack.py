@@ -12,6 +12,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from bot.keyboards.attack import attack_confirm_kb, attack_menu_kb, infections_list_kb
 from bot.keyboards.common import back_button
@@ -89,7 +90,9 @@ async def msg_attack_username(
 
     # Lookup target — case-insensitive to handle e.g. "johndoe" vs "JohnDoe"
     result = await session.execute(
-        select(User).where(func.lower(User.username) == raw.lower())
+        select(User)
+        .where(func.lower(User.username) == raw.lower())
+        .options(selectinload(User.virus), selectinload(User.immunity))
     )
     target: User | None = result.scalar_one_or_none()
 

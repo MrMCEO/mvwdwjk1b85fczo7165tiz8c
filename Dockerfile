@@ -9,4 +9,4 @@ COPY . .
 
 ENV PYTHONPATH=/app
 
-CMD ["sh", "-c", "alembic upgrade head && python -m bot.main"]
+CMD ["sh", "-c", "echo \"DB_URL from env: ${DB_URL:-(not set, using config default)}\" | sed 's/:[^@]*@/:***@/' && alembic upgrade head && python -m bot.main"]

@@ -318,7 +318,9 @@ async def attack_player(
     attacker.bio_coins += reward
 
     # Victim loses same amount (but not below their minimum balance)
-    victim.bio_coins = max(0, victim.bio_coins - reward)
+    victim_total_level = immunity_level + victim_virus_total  # victim's total upgrade levels
+    victim_min_balance = -(victim_total_level * 500)
+    victim.bio_coins = max(victim_min_balance, victim.bio_coins - reward)
 
     # Record transactions
     reward_tx = ResourceTransaction(

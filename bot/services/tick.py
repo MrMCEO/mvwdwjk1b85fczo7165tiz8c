@@ -139,7 +139,9 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
         victim_total_level = victim_virus_level + victim_immunity_level
         drain = max(10, victim_total_level * 2)
 
-        new_balance = max(0, victim.bio_coins - drain)
+        # Minimum balance the victim can reach: -(total_level * 500)
+        victim_min_balance = -(victim_total_level * 500)
+        new_balance = max(victim_min_balance, victim.bio_coins - drain)
         actual_drain = victim.bio_coins - new_balance  # may be < drain if near min_balance
         if actual_drain <= 0:
             actual_drain = 0

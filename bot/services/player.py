@@ -75,7 +75,7 @@ async def create_player(
     user = User(
         tg_id=tg_id,
         username=username or "",
-        bio_coins=500,
+        bio_coins=2500,
         premium_coins=0,
     )
     session.add(user)

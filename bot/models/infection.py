@@ -25,6 +25,7 @@ class Infection(Base):
     )
     damage_per_tick: Mapped[float] = mapped_column(Float, default=1.0, server_default="1.0")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    duration_ticks: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
 
     # Relationships
     attacker: Mapped["User"] = relationship(

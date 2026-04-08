@@ -79,19 +79,9 @@ _IMMUNITY_BRANCH_NAMES = {
 
 
 def calc_upgrade_cost(base_cost: int, multiplier: float, current_level: int) -> int:
-    """
-    Return the bio_coins cost of upgrading from *current_level* to current_level+1.
-
-    Examples
-    --------
-    >>> calc_upgrade_cost(100, 1.5, 0)   # buy level 1
-    100
-    >>> calc_upgrade_cost(100, 1.5, 1)   # buy level 2
-    150
-    >>> calc_upgrade_cost(100, 1.5, 3)   # buy level 4
-    337
-    """
-    return int(base_cost * (multiplier ** current_level))
+    """Quadratic upgrade cost. base_cost/multiplier kept for API compat."""
+    L = current_level + 1
+    return 300 * L + 8 * L * L
 
 
 # ---------------------------------------------------------------------------

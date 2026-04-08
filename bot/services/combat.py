@@ -110,6 +110,15 @@ def _upgrade_effect(upgrades: dict, branch) -> float:
     return u.effect_value
 
 
+async def _get_total_level(session: AsyncSession, user_id: int) -> int:
+    """Return sum of all virus + immunity upgrade levels for a given user."""
+    virus, _ = await _load_virus_with_upgrades(session, user_id)
+    immunity, _ = await _load_immunity_with_upgrades(session, user_id)
+    virus_total = sum(u.level for u in virus.upgrades) if virus else 0
+    immunity_total = sum(u.level for u in immunity.upgrades) if immunity else 0
+    return virus_total + immunity_total
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -265,18 +274,26 @@ async def attack_player(
     has_cloak = await get_active_item_effect(session, attacker_id, ItemType.STEALTH_CLOAK)  # noqa: F841
     has_shield = await get_active_item_effect(session, victim_id, ItemType.SHIELD_BOOST)
 
-    # --- Infection probability (new diff-based formula) ---
-    # Base: 50% ± 0.7% per level difference. Clamped 3%–97%.
+    # --- Infection probability (exponential formula with BARRIER) ---
+    # Base: asymptotic curve from 35% → 90%, reduced by BARRIER upgrade levels. Clamped 5%–90%.
     if has_bio_bomb:
         chance: float = 0.97  # near-guaranteed attack (leave 3% for the unexpected)
     else:
-        diff = virus_level - immunity_level
-        chance = 0.50 + diff * 0.007
-        chance = max(0.03, min(0.97, chance))
+        # Barrier effect from immunity upgrades
+        barrier_level_val = 0
+        if immunity_upgrades:
+            for u in immunity_upgrades.values():
+                if u.branch == ImmunityBranch.BARRIER:
+                    barrier_level_val = u.level
+                    break
 
-        # Apply event multiplier (additive cap to avoid exceeding 0.97)
+        base_chance = 0.35 + 0.55 * (1 - math.exp(-virus_level * 0.08))
+        chance = base_chance - barrier_level_val * 0.025
+        chance = max(0.05, min(0.90, chance))
+
+        # Apply event multiplier (additive cap to avoid exceeding 0.90)
         if attack_chance_event_mult != 1.0:
-            chance = min(0.97, chance * attack_chance_event_mult)
+            chance = min(0.90, chance * attack_chance_event_mult)
 
         # Mutations: additive bonus to base chance
         chance += atk_mods.get("chance_bonus", 0.0)
@@ -287,7 +304,7 @@ async def attack_player(
         if has_shield:
             chance -= 0.10
         # Re-clamp after all modifiers
-        chance = max(0.03, min(0.97, chance))
+        chance = max(0.05, min(0.90, chance))
 
     roll = random.random()
     success = roll < chance
@@ -307,19 +324,26 @@ async def attack_player(
             f"Иммунитет жертвы устоял."
         ), None
 
-    # --- Risk-based reward for attacker ---
-    avg_level = (virus_level + immunity_level) / 2
-    risk_multiplier = 1 + (immunity_level - virus_level) / 50
-    risk_multiplier = max(0.1, min(5.0, risk_multiplier))
-    reward = int(avg_level * 50 * risk_multiplier)
-    reward = max(10, reward)
+    # --- Income-based reward with asymmetric loot modifier ---
+    # Base reward ≈ 3 hours of victim's mining income
+    victim_mining = max(50, 120 - 4 * (immunity_level + victim_virus_total))
+    base_reward = victim_mining * 3
+
+    # Asymmetric loot modifier: penalty for attacking weaker, bonus for attacking stronger
+    level_diff = virus_level - immunity_level
+    if level_diff > 0:  # attacking DOWN — penalty
+        loot_mult = max(0.05, 1.0 - level_diff * 0.04)
+    else:  # attacking UP — bonus
+        loot_mult = min(1.5, 1.0 + abs(level_diff) * 0.02)
+
+    reward = max(10, int(base_reward * loot_mult))
 
     # Attacker receives reward
     attacker.bio_coins += reward
 
     # Victim loses same amount (but not below their minimum balance)
     victim_total_level = immunity_level + victim_virus_total  # victim's total upgrade levels
-    victim_min_balance = -(victim_total_level * 500)
+    victim_min_balance = -(victim_total_level * 200)
     victim.bio_coins = max(victim_min_balance, victim.bio_coins - reward)
 
     # Record transactions
@@ -347,15 +371,40 @@ async def attack_player(
     if has_enhancer:
         damage_per_tick *= 2.0
 
-    # --- Create Infection ---
-    infection = Infection(
-        attacker_id=attacker_id,
-        victim_id=victim_id,
-        started_at=_now_utc(),
-        damage_per_tick=damage_per_tick,
-        is_active=True,
+    # --- CONTAGION: infection duration based on upgrade level ---
+    contagion_level = 0
+    if virus_upgrades:
+        for u in virus_upgrades.values():
+            if u.branch == VirusBranch.CONTAGION:
+                contagion_level = u.level
+                break
+    duration_ticks = 6 + contagion_level * 2
+
+    # --- Prevent circular infection ---
+    # If the victim is already actively infecting the attacker, skip infection creation.
+    # The attack still succeeds and the attacker keeps the reward.
+    existing_reverse = await session.execute(
+        select(Infection).where(
+            and_(
+                Infection.attacker_id == victim_id,
+                Infection.victim_id == attacker_id,
+                Infection.is_active == True,  # noqa: E712
+            )
+        )
     )
-    session.add(infection)
+    is_circular = existing_reverse.scalar_one_or_none() is not None
+
+    if not is_circular:
+        # --- Create Infection ---
+        infection = Infection(
+            attacker_id=attacker_id,
+            victim_id=victim_id,
+            started_at=_now_utc(),
+            damage_per_tick=damage_per_tick,
+            is_active=True,
+            duration_ticks=duration_ticks,
+        )
+        session.add(infection)
 
     # --- Log the successful attempt ---
     attempt = AttackAttempt(
@@ -520,7 +569,11 @@ async def try_cure(
     if user is None:
         return False, "Пользователь не найден."
 
-    cost = math.ceil(infection.damage_per_tick * CURE_COST_MULTIPLIER)
+    # Scale cure cost based on victim's total level (power score)
+    victim_total = await _get_total_level(session, user_id)
+    power_score = victim_total * 150
+    cost_multiplier = max(1.0, min(8.0, power_score / 600))
+    cost = math.ceil(infection.damage_per_tick * CURE_COST_MULTIPLIER * cost_multiplier)
 
     if user.bio_coins < cost:
         return False, (

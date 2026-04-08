@@ -44,8 +44,8 @@ MINING_MIN = 15   # balanced: ~32 avg/hr, 1st upgrade (~80 coins) in ~2.5hrs
 MINING_MAX = 50
 
 DAILY_BASE = 100
-DAILY_STREAK_BONUS = 0.15   # +15% per consecutive day (was 10%); rewards loyal players more
-DAILY_STREAK_MAX = 7        # cap at day 7 → +90 %
+DAILY_STREAK_BONUS = 0.04   # +4% per consecutive day; rewards loyal players more
+DAILY_STREAK_MAX = 21       # cap at day 21 → +80%
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -152,7 +152,7 @@ async def mine_resources(
 
     # --- Mine (scalable formula) ---
     total_level = await _get_total_level(session, user_id)
-    base_reward = 50 + total_level * 10
+    base_reward = max(50, 120 - 4 * total_level)
 
     multiplier = await get_mining_multiplier(session, user_id)
     amount = int(base_reward * multiplier)
@@ -168,6 +168,10 @@ async def mine_resources(
     # Alliance mining bonus
     alliance_mining_bonus = await get_alliance_mining_bonus(session, user_id)
     amount = int(amount * (1.0 + alliance_mining_bonus))
+
+    # Debt bonus: negative balance gets +50% to help recovery
+    if user.bio_coins < 0:
+        amount = int(amount * 1.5)
 
     user.bio_coins += amount
 
@@ -240,7 +244,7 @@ async def claim_daily_bonus(
 
     # Scalable daily reward based on total upgrade level
     total_level = await _get_total_level(session, user_id)
-    daily_base = 200 + total_level * 20
+    daily_base = 600 + total_level * 15
     amount = int(daily_base * streak_multiplier * premium_multiplier)
 
     # Event modifier (Gold Rush also boosts daily bonus)

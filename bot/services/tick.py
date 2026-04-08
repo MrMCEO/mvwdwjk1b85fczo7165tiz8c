@@ -16,6 +16,7 @@ notifications via the Bot instance.
 from __future__ import annotations
 
 import logging
+import math
 import random
 from datetime import UTC, datetime
 
@@ -137,17 +138,32 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
             else 0
         )
         victim_total_level = victim_virus_level + victim_immunity_level
-        drain = max(10, victim_total_level * 2)
 
-        # Minimum balance the victim can reach: -(total_level * 500)
-        victim_min_balance = -(victim_total_level * 500)
-        new_balance = max(victim_min_balance, victim.bio_coins - drain)
-        actual_drain = victim.bio_coins - new_balance  # may be < drain if near min_balance
-        if actual_drain <= 0:
+        # Use actual damage_per_tick from the infection (set by attacker's LETHALITY)
+        base_drain = inf.damage_per_tick  # already stored on infection creation
+
+        # BARRIER reduces drain (soft scaling, 70% cap)
+        barrier_effect = 0.0
+        if victim_immunity is not None and victim_immunity.upgrades:
+            for u in victim_immunity.upgrades:
+                if u.branch == ImmunityBranch.BARRIER:
+                    barrier_level = u.level
+                    barrier_effect = barrier_level * 1.5 * (1 - barrier_level / 120)
+                    break
+
+        # Minimum 30% of base damage always gets through (70% reduction cap)
+        actual_drain = max(math.floor(base_drain * 0.30), base_drain - barrier_effect)
+        actual_drain = max(1, int(actual_drain))  # minimum 1 coin drain
+
+        # Minimum balance the victim can reach: -(total_level * 200)
+        victim_min_balance = -(victim_total_level * 200)
+
+        # Drain stops at debt cap
+        if victim.bio_coins <= victim_min_balance:
             actual_drain = 0
 
         if actual_drain > 0:
-            victim.bio_coins = new_balance
+            victim.bio_coins = victim.bio_coins - actual_drain
 
             # Record loss for victim
             loss_tx = ResourceTransaction(
@@ -196,6 +212,35 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                 "message": drain_msg,
             })
 
+        # --- Duration expiry check (CONTAGION determines duration_ticks) ---
+        if hasattr(inf, 'duration_ticks') and inf.duration_ticks is not None:
+            if inf.started_at:
+                hours_elapsed = (datetime.utcnow() - inf.started_at).total_seconds() / 3600
+                ticks_elapsed = int(hours_elapsed)  # 1 tick = 1 hour
+                if ticks_elapsed >= inf.duration_ticks:
+                    inf.is_active = False
+                    logger.info(
+                        "Tick: infection #%d expired by duration (%d ticks). victim=%d",
+                        inf.id, inf.duration_ticks, victim.tg_id,
+                    )
+                    notifications.append({
+                        "user_id": victim.tg_id,
+                        "notify_type": "infections",
+                        "message": (
+                            f"Твой иммунитет победил! "
+                            f"Заражение #{inf.id} вылечено автоматически."
+                        ),
+                    })
+                    notifications.append({
+                        "user_id": attacker.tg_id,
+                        "notify_type": "infections",
+                        "message": (
+                            f"Игрок {_fmt_user(victim)} "
+                            f"вылечился от твоего вируса (заражение #{inf.id})."
+                        ),
+                    })
+                    continue
+
         # --- Auto-cure roll ---
         # Base: 5% + recovery_speed (0.03 default) = 8% for newbie.
         # REGENERATION upgrade adds +0.02/level to cure chance.
@@ -209,7 +254,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                     break
         alliance_regen = await get_alliance_regen_bonus(session, victim.tg_id)
         cure_chance = BASE_CURE_CHANCE + recovery_speed + regen_bonus + alliance_regen
-        cure_chance = max(0.0, min(0.80, cure_chance))  # cap at 80% — infection should always have some duration
+        cure_chance = max(0.0, min(0.60, cure_chance))  # cap at 60% — infection should always have some duration
 
         if random.random() < cure_chance:
             inf.is_active = False

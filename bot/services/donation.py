@@ -24,7 +24,7 @@ from bot.models.user import User
 # Constants
 # ---------------------------------------------------------------------------
 
-EXCHANGE_RATE: int = 10  # 1 premium_coin = 10 bio_coins
+EXCHANGE_RATE: int = 15  # 1 premium_coin = 15 bio_coins
 
 # ---------------------------------------------------------------------------
 # Internal helpers

@@ -130,6 +130,9 @@ dmypy.json
 # Project data directory
 data/
 
+# Log files (rotated logs should not be committed)
+logs/*.log*
+
 # IDE
 .idea/
 .vscode/

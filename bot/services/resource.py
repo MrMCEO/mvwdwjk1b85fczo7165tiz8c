@@ -40,10 +40,6 @@ from bot.services.premium import get_daily_multiplier, get_mining_cooldown, get_
 
 DAILY_COOLDOWN = timedelta(hours=24)
 
-MINING_MIN = 15   # balanced: ~32 avg/hr, 1st upgrade (~80 coins) in ~2.5hrs
-MINING_MAX = 50
-
-DAILY_BASE = 100
 DAILY_STREAK_BONUS = 0.04   # +4% per consecutive day; rewards loyal players more
 DAILY_STREAK_MAX = 21       # cap at day 21 → +80%
 
@@ -287,6 +283,7 @@ async def _compute_streak(
             ResourceTransaction.reason == TransactionReason.DAILY_BONUS,
         )
         .order_by(desc(ResourceTransaction.created_at))
+        .limit(DAILY_STREAK_MAX + 1)
     )
     txs = result.scalars().all()
 

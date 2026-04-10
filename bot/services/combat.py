@@ -13,10 +13,13 @@ Attack flow:
 
 from __future__ import annotations
 
+import logging
 import math
 import random
 from datetime import UTC, datetime, timedelta
 from html import escape
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -310,6 +313,7 @@ async def attack_player(
     success = roll < chance
 
     if not success:
+        logger.info(f"Attack: {attacker_id} -> {victim_id} result='miss' reward=0")
         # Log the failed attempt
         attempt = AttackAttempt(
             attacker_id=attacker_id,
@@ -414,6 +418,8 @@ async def attack_player(
     )
     session.add(attempt)
     await session.flush()
+
+    logger.info(f"Attack: {attacker_id} -> {victim_id} result='success' reward={reward}")
 
     # --- Check hit-contract completion ---
     await check_contract_completion(session, attacker_id, victim_id)
@@ -575,10 +581,13 @@ async def try_cure(
     cost_multiplier = max(1.0, min(8.0, power_score / 600))
     cost = math.ceil(infection.damage_per_tick * CURE_COST_MULTIPLIER * cost_multiplier)
 
-    if user.bio_coins < cost:
+    # Debt cap: -(total_level * 200). Allow cure if it doesn't exceed debt cap.
+    user_total_level = await _get_total_level(session, user_id)
+    debt_cap = -(user_total_level * 200)
+    if user.bio_coins - cost < debt_cap:
         return False, (
-            f"Недостаточно 🧫 BioCoins для лечения. "
-            f"Нужно {cost}, у тебя {user.bio_coins}."
+            f"Недостаточно 🧫 BioCoins даже для долга. "
+            f"Нужно {cost}, у тебя {user.bio_coins}, лимит долга {debt_cap}."
         )
 
     # Deduct cost and deactivate

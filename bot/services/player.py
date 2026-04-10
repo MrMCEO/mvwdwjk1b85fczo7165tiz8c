@@ -124,7 +124,7 @@ async def create_player(
 
     await session.flush()
 
-    logger.info("Created new player tg_id=%d username=%r", tg_id, username)
+    logger.info(f"New player registered: tg_id={tg_id} username={username}")
     return user
 
 

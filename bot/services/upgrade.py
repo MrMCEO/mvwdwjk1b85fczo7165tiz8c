@@ -12,8 +12,12 @@ When no row exists yet the branch is implicitly at level 0, effect_value 0.
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade
 from bot.utils.chat import dlvl
@@ -232,6 +236,7 @@ async def upgrade_virus_branch(
     branch_name = _VIRUS_BRANCH_NAMES[branch_key]
     new_level = upgrade.level
     next_cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], new_level)
+    logger.info(f"Upgrade: user={user_id} branch={branch_key} new_level={new_level}")
     return True, (
         f"Ветка «{branch_name}» прокачана до уровня {dlvl(new_level)}! "
         f"Эффект: {upgrade.effect_value:.2f}. "
@@ -328,6 +333,7 @@ async def upgrade_immunity_branch(
     branch_name = _IMMUNITY_BRANCH_NAMES[branch_key]
     new_level = upgrade.level
     next_cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], new_level)
+    logger.info(f"Upgrade: user={user_id} branch={branch_key} new_level={new_level}")
     return True, (
         f"Ветка «{branch_name}» прокачана до уровня {dlvl(new_level)}! "
         f"Эффект: {upgrade.effect_value:.2f}. "

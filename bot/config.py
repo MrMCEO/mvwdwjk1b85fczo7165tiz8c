@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     bot_token: str
     admin_ids: list[int] = []
     db_url: str = "postgresql+asyncpg://bothost_db_f856fb47afb1:sww8k3UMA_XkaJper6w4HyX1UARVG15toVC7lCnfkAg@node1.pghost.ru:15540/bothost_db_f856fb47afb1"
+    log_level: str = "INFO"
 
     @field_validator("admin_ids", mode="before")
     @classmethod

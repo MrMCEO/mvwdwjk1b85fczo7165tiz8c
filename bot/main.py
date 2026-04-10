@@ -8,6 +8,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from bot.config import get_settings
+from bot.utils.logger import setup_logging
 from bot.handlers.admin import router as admin_router
 from bot.handlers.moderation import router as moderation_router
 from bot.handlers.alliance import router as alliance_router
@@ -36,10 +37,6 @@ from bot.middlewares.db import DbSessionMiddleware
 from bot.models.base import init_db
 from bot.services.tick import start_scheduler
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -53,6 +50,8 @@ async def on_startup(bot: Bot) -> None:
 
 async def main() -> None:
     settings = get_settings()
+    setup_logging(settings.log_level)
+    logger.info("Bot starting up...")
 
     proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
     session = AiohttpSession(proxy=proxy) if proxy else AiohttpSession()

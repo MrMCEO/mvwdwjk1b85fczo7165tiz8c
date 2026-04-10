@@ -119,6 +119,8 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
 
     logger.info("Tick: processing %d active infection(s).", len(infections))
 
+    cured_count = 0
+
     for inf in infections:
         victim: User = inf.victim
         attacker: User = inf.attacker
@@ -213,12 +215,13 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
             })
 
         # --- Duration expiry check (CONTAGION determines duration_ticks) ---
-        if hasattr(inf, 'duration_ticks') and inf.duration_ticks is not None:
+        if inf.duration_ticks is not None:
             if inf.started_at:
-                hours_elapsed = (datetime.utcnow() - inf.started_at).total_seconds() / 3600
+                hours_elapsed = (_now_utc() - inf.started_at).total_seconds() / 3600
                 ticks_elapsed = int(hours_elapsed)  # 1 tick = 1 hour
                 if ticks_elapsed >= inf.duration_ticks:
                     inf.is_active = False
+                    cured_count += 1
                     logger.info(
                         "Tick: infection #%d expired by duration (%d ticks). victim=%d",
                         inf.id, inf.duration_ticks, victim.tg_id,
@@ -258,6 +261,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
 
         if random.random() < cure_chance:
             inf.is_active = False
+            cured_count += 1
             logger.info(
                 "Tick: infection #%d cured (auto). victim=%d",
                 inf.id, victim.tg_id,
@@ -279,6 +283,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                 ),
             })
 
+    logger.info(f"Tick processed: {len(infections)} infections, {cured_count} cured")
     await session.flush()
     return notifications
 

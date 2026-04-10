@@ -22,7 +22,7 @@ router = Router(name="suggest")
 RATE_LIMIT_COUNT = 5
 RATE_LIMIT_WINDOW_MIN = 30
 MIN_LENGTH = 10
-MAX_LENGTH = 1000
+MAX_LENGTH = 4000  # leave headroom under Telegram's 4096 limit for header/formatting
 
 
 def _moderation_kb(suggestion_id: int) -> InlineKeyboardMarkup:

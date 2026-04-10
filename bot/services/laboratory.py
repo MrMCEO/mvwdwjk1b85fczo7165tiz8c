@@ -36,6 +36,42 @@ def _now_utc() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+def calc_cost_multiplier(total_level: int, balance: int) -> float:
+    """
+    Power-based cost multiplier for lab items and consumables.
+
+    Scales with both level and balance — rich/strong players pay more.
+    Capped at 15x to prevent absurd prices.
+
+    Examples:
+    - New player (lvl 0, 500 coins):     ~1.0x
+    - Mid game (lvl 10, 5k coins):       ~3.5x
+    - Veteran (lvl 30, 100k coins):      ~15.0x (capped)
+    - Top player (lvl 50, 1M coins):     ~15.0x (capped)
+    """
+    level_factor = total_level * 0.2
+    balance_factor = min(10.0, max(0, balance) / 10000)
+    return max(1.0, min(15.0, 1.0 + level_factor + balance_factor))
+
+
+async def _get_total_level_for_user(session: AsyncSession, user_id: int) -> int:
+    """Sum of all virus + immunity branch levels for the user."""
+    from bot.models.virus import VirusUpgrade
+    from bot.models.immunity import ImmunityUpgrade
+
+    virus_total = await session.execute(
+        select(func.coalesce(func.sum(VirusUpgrade.level), 0))
+        .join(Virus, Virus.id == VirusUpgrade.virus_id)
+        .where(Virus.owner_id == user_id)
+    )
+    immunity_total = await session.execute(
+        select(func.coalesce(func.sum(ImmunityUpgrade.level), 0))
+        .join(Immunity, Immunity.id == ImmunityUpgrade.immunity_id)
+        .where(Immunity.owner_id == user_id)
+    )
+    return int(virus_total.scalar_one() + immunity_total.scalar_one())
+
+
 async def _get_user(session: AsyncSession, user_id: int) -> User | None:
     result = await session.execute(
         select(User).where(User.tg_id == user_id).with_for_update()
@@ -67,7 +103,7 @@ async def craft_item(
     Returns (success, message).
     """
     cfg = ITEM_CONFIG[item_type]
-    cost: int = cfg["cost"]
+    base_cost: int = cfg["cost"]
     name: str = cfg["name"]
     emoji: str = cfg["emoji"]
 
@@ -75,11 +111,16 @@ async def craft_item(
     if user is None:
         return False, "Игрок не найден."
 
+    # Scale cost by player power
+    total_level = await _get_total_level_for_user(session, user_id)
+    multiplier = calc_cost_multiplier(total_level, user.bio_coins)
+    cost = int(base_cost * multiplier)
+
     if user.bio_coins < cost:
         shortage = cost - user.bio_coins
         return False, (
             f"Недостаточно 🧫 BioCoins!\n"
-            f"Нужно: <b>{cost}</b> 🧫 BioCoins\n"
+            f"Нужно: <b>{cost}</b> 🧫 BioCoins (x{multiplier:.1f} от базовой цены {base_cost})\n"
             f"У тебя: <b>{user.bio_coins}</b> 🧫 BioCoins\n"
             f"Не хватает: <b>{shortage}</b> 🧫 BioCoins"
         )
@@ -107,7 +148,7 @@ async def craft_item(
 
     return True, (
         f"{emoji} <b>{name}</b> успешно скрафчен!\n"
-        f"Потрачено: <b>{cost}</b> 🧫 BioCoins\n"
+        f"Потрачено: <b>{cost}</b> 🧫 BioCoins (x{multiplier:.1f})\n"
         f"Баланс: <b>{user.bio_coins}</b> 🧫 BioCoins\n\n"
         "Предмет добавлен в инвентарь."
     )

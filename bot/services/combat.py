@@ -35,7 +35,7 @@ from bot.models.user import User
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
 from bot.services.alliance import get_alliance_attack_bonus, get_alliance_defense_bonus
 from bot.services.event import get_event_modifier
-from bot.services.laboratory import get_active_item_effect
+from bot.services.laboratory import calc_cost_multiplier, get_active_item_effect
 from bot.services.market import check_contract_completion
 from bot.services.mutation_effects import apply_mutation_to_attack, apply_mutation_to_defense
 from bot.services.player import DEFAULT_VIRUS_NAME
@@ -601,10 +601,9 @@ async def try_cure(
     if user is None:
         return False, "Пользователь не найден."
 
-    # Scale cure cost based on victim's total level (power score)
+    # Scale cure cost based on victim's total level and balance
     victim_total = await _get_total_level(session, user_id)
-    power_score = victim_total * 150
-    cost_multiplier = max(1.0, min(8.0, power_score / 600))
+    cost_multiplier = calc_cost_multiplier(victim_total, user.bio_coins)
     cost = math.ceil(infection.damage_per_tick * CURE_COST_MULTIPLIER * cost_multiplier)
 
     # Debt cap: -(total_level * 200). Allow cure if it doesn't exceed debt cap.

@@ -23,7 +23,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.laboratory import lab_craft_kb, lab_inventory_kb, lab_menu_kb
 from bot.models.item import ITEM_CONFIG, Item, ItemType
+from bot.models.user import User
 from bot.services.laboratory import (
+    _get_total_level_for_user,
+    calc_cost_multiplier,
     craft_item,
     get_inventory,
     spy_on_player,
@@ -82,12 +85,23 @@ async def cb_lab_menu(callback: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data == "lab_craft")
-async def cb_lab_craft(callback: CallbackQuery) -> None:
+async def cb_lab_craft(callback: CallbackQuery, session: AsyncSession) -> None:
+    user_id = callback.from_user.id
+    total_level = await _get_total_level_for_user(session, user_id)
+
+    # Fetch user balance for the multiplier (read-only, no lock needed)
+    _user_result = await session.execute(select(User).where(User.tg_id == user_id))
+    _user = _user_result.scalar_one_or_none()
+    balance = _user.bio_coins if _user is not None else 0
+
+    multiplier = calc_cost_multiplier(total_level, balance)
+
     lines = ["🔬 <b>Крафт предметов</b>\n", "<i>Выбери предмет для создания:</i>\n"]
     for item_type in ItemType:
         cfg = ITEM_CONFIG[item_type]
+        scaled_cost = int(cfg["cost"] * multiplier)
         lines.append(
-            f"{cfg['emoji']} <b>{cfg['name']}</b> — <code>{cfg['cost']}</code> 🧫\n"
+            f"{cfg['emoji']} <b>{cfg['name']}</b> — <code>{scaled_cost}</code> 🧫 (x{multiplier:.1f})\n"
             f"   <i>{cfg['desc']}</i>"
         )
     text = "\n".join(lines)
@@ -114,11 +128,21 @@ async def cb_lab_craft_item(callback: CallbackQuery, session: AsyncSession) -> N
     success, message = await craft_item(session, callback.from_user.id, item_type)
 
     # Build craft screen lines (shared for both success and failure)
+    # Recalculate multiplier with updated balance (after potential deduction)
+    _post_total_level = await _get_total_level_for_user(session, callback.from_user.id)
+    _post_user_result = await session.execute(
+        select(User).where(User.tg_id == callback.from_user.id)
+    )
+    _post_user = _post_user_result.scalar_one_or_none()
+    _post_balance = _post_user.bio_coins if _post_user is not None else 0
+    _post_multiplier = calc_cost_multiplier(_post_total_level, _post_balance)
+
     lines = ["🔬 <b>Крафт предметов</b>\n", "<i>Выбери предмет для создания:</i>\n"]
     for it in ItemType:
         cfg = ITEM_CONFIG[it]
+        scaled_cost = int(cfg["cost"] * _post_multiplier)
         lines.append(
-            f"{cfg['emoji']} <b>{cfg['name']}</b> — <code>{cfg['cost']}</code> 🧫\n"
+            f"{cfg['emoji']} <b>{cfg['name']}</b> — <code>{scaled_cost}</code> 🧫 (x{_post_multiplier:.1f})\n"
             f"   <i>{cfg['desc']}</i>"
         )
     icon = "✅" if success else "❌"

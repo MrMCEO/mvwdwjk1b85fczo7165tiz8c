@@ -1,9 +1,9 @@
 """
 Transfer service — peer-to-peer bio_coin transfers between players.
 
-Commission: 10% (recipient receives amount * 0.9).
+Commission: 5% (recipient receives amount * 0.95).
 Daily limit: varies by premium status (see premium.get_transfer_limit()).
-             FREE: 500 🧫 / day. Higher status tiers increase the limit.
+             FREE: 1500 🧫 / day. Higher status tiers increase the limit.
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ from bot.services import premium as _premium
 # Constants
 # ---------------------------------------------------------------------------
 
-TRANSFER_COMMISSION = 0.10   # 10% комиссия
-DEFAULT_DAILY_LIMIT = 500    # 🧫 BioCoins в день (базовый лимит для FREE)
+TRANSFER_COMMISSION = 0.05   # 5% комиссия
+DEFAULT_DAILY_LIMIT = 1500   # 🧫 BioCoins в день (базовый лимит для FREE)
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +162,7 @@ async def transfer_coins(
     return True, (
         f"✅ Перевод выполнен!\n\n"
         f"Отправлено: <b>{amount} 🧫</b>\n"
-        f"Комиссия (10%): <b>{commission} 🧫</b>\n"
+        f"Комиссия (5%): <b>{commission} 🧫</b>\n"
         f"Получено игроком <b>{recipient_display}</b>: <b>{received} 🧫</b>\n\n"
         f"Твой баланс: <b>{sender.bio_coins} 🧫</b>"
     )

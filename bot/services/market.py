@@ -36,7 +36,7 @@ from bot.services.mutation import MUTATION_CONFIG
 # ---------------------------------------------------------------------------
 
 LISTING_DURATION = timedelta(hours=24)
-SELL_COMMISSION_PCT = 0.05  # 5% комиссия: удерживается с покупателя
+SELL_COMMISSION_PCT = 0.025  # 2.5% комиссия: удерживается с покупателя
 
 # ---------------------------------------------------------------------------
 # Internal helpers

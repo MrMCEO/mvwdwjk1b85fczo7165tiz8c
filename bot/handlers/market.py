@@ -129,7 +129,7 @@ async def cb_market_menu(callback: CallbackQuery, state: FSMContext) -> None:
         "━━━━━━━━━━━━━━━━━━\n\n"
         "📦 Торгуй предметами и мутациями с другими игроками\n"
         "🎯 Размещай контракты на заражение врагов\n\n"
-        "<i>Комиссия биржи: +5% от цены (сверху для покупателя)</i>",
+        "<i>Комиссия биржи: +2.5% от цены (сверху для покупателя)</i>",
         reply_markup=market_menu_kb(),
         parse_mode="HTML",
     )
@@ -509,7 +509,7 @@ async def cb_market_pick_item(
 
     await callback.message.edit_text(
         f"📦 Выбран: {item_emoji} <b>{item_name}</b>\n\n"
-        "Введи цену в <b>🧫 BioCoins</b> (покупатель заплатит +5% комиссии):\n\n"
+        "Введи цену в <b>🧫 BioCoins</b> (покупатель заплатит +2.5% комиссии):\n\n"
         "Или нажми «Назад» для отмены:",
         reply_markup=back_button("market_menu"),
         parse_mode="HTML",
@@ -655,7 +655,7 @@ async def cb_market_pick_mutation(
 
     await callback.message.edit_text(
         f"🧬 Выбрана: <b>{description}</b> [{rarity}]\n\n"
-        "Введи цену в <b>🧫 BioCoins</b> (покупатель заплатит +5% комиссии):\n\n"
+        "Введи цену в <b>🧫 BioCoins</b> (покупатель заплатит +2.5% комиссии):\n\n"
         "Или нажми «Назад» для отмены:",
         reply_markup=back_button("market_menu"),
         parse_mode="HTML",

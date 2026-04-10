@@ -10,12 +10,16 @@ from __future__ import annotations
 
 from html import escape
 
-from aiogram import Router
+import logging
+
+from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from bot.keyboards.transfer import transfer_back_kb, transfer_confirm_kb, transfer_menu_kb
 from bot.models.user import User
@@ -165,7 +169,7 @@ async def msg_transfer_username(
         f"👤 Получатель: <b>@{escape(raw)}</b>\n\n"
         f"💰 Твой баланс: <code>{bio_balance:,}</code> 🧫\n"
         f"📊 Доступный лимит: <code>{remaining:,}</code> 🧫 из <code>{daily_limit:,}</code>\n"
-        f"💱 Комиссия: <code>{commission_pct}%</code> <i>(получатель получит 90%)</i>\n\n"
+        f"💱 Комиссия: <code>{commission_pct}%</code> <i>(получатель получит {100 - commission_pct}%)</i>\n\n"
         "Введи сумму перевода <i>(целое число)</i>:\n\n"
         "Или нажми «Назад» для отмены.",
         reply_markup=transfer_back_kb(),
@@ -250,7 +254,7 @@ async def msg_transfer_amount(
         f"━━━━━━━━━━━━━━━━━━\n\n"
         f"👤 Получатель: <b>@{escape(recipient_username)}</b>\n"
         f"📤 Отправляешь: <code>{amount:,}</code> 🧫\n"
-        f"💱 Комиссия (<code>10%</code>): <code>{commission:,}</code> 🧫\n"
+        f"💱 Комиссия (<code>{int(TRANSFER_COMMISSION * 100)}%</code>): <code>{commission:,}</code> 🧫\n"
         f"📥 Получит: <code>{received:,}</code> 🧫\n\n"
         "<i>Подтверди или отмени перевод:</i>",
         reply_markup=transfer_confirm_kb(recipient_username, amount, received, commission),
@@ -264,11 +268,12 @@ async def msg_transfer_amount(
 
 @router.callback_query(lambda c: c.data == "transfer_confirm")
 async def cb_transfer_confirm(
-    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession, bot: Bot
 ) -> None:
     """Execute the confirmed transfer."""
     data = await state.get_data()
     recipient_username = data.get("recipient_username", "")
+    recipient_id = data.get("recipient_id")
     amount = data.get("amount", 0)
     await state.clear()
 
@@ -279,6 +284,25 @@ async def cb_transfer_confirm(
     success, msg = await transfer_coins(
         session, callback.from_user.id, recipient_username, amount
     )
+
+    # Notify the recipient (best-effort, ignore if blocked)
+    if success and recipient_id:
+        sender_username = callback.from_user.username or ""
+        sender_display = f"@{sender_username}" if sender_username else f"id{callback.from_user.id}"
+        commission = max(1, int(amount * TRANSFER_COMMISSION))
+        received = amount - commission
+        try:
+            await bot.send_message(
+                chat_id=recipient_id,
+                text=(
+                    f"💸 <b>Тебе перевели монеты!</b>\n\n"
+                    f"От: <b>{escape(sender_display)}</b>\n"
+                    f"Сумма: <code>{received:,}</code> 🧫"
+                ),
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            logger.debug(f"Failed to notify recipient {recipient_id}: {exc}")
 
     uid = callback.from_user.id
     daily_limit = await get_transfer_limit(session, uid)

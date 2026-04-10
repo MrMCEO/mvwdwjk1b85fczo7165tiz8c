@@ -17,12 +17,13 @@ def lab_menu_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def lab_craft_kb() -> InlineKeyboardMarkup:
-    """List all craftable items with their costs."""
+def lab_craft_kb(multiplier: float = 1.0) -> InlineKeyboardMarkup:
+    """List all craftable items with their (scaled) costs."""
     builder = InlineKeyboardBuilder()
     for item_type in ItemType:
         cfg = ITEM_CONFIG[item_type]
-        label = f"{cfg['emoji']} {cfg['name']} — {cfg['cost']} 🧫"
+        scaled_cost = int(cfg["cost"] * multiplier)
+        label = f"{cfg['emoji']} {cfg['name']} — {scaled_cost} 🧫"
         builder.button(text=label, callback_data=f"lab_craft_{item_type.value}", style=ButtonStyle.SUCCESS)
     builder.button(text="🔙 Назад", callback_data="lab_menu")
     # 1 per row so names are readable, back button on its own row

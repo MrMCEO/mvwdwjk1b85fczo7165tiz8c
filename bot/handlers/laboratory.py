@@ -105,7 +105,7 @@ async def cb_lab_craft(callback: CallbackQuery, session: AsyncSession) -> None:
             f"   <i>{cfg['desc']}</i>"
         )
     text = "\n".join(lines)
-    await callback.message.edit_text(text, reply_markup=lab_craft_kb(), parse_mode="HTML")
+    await callback.message.edit_text(text, reply_markup=lab_craft_kb(multiplier), parse_mode="HTML")
     await callback.answer()
 
 
@@ -148,7 +148,7 @@ async def cb_lab_craft_item(callback: CallbackQuery, session: AsyncSession) -> N
     icon = "✅" if success else "❌"
     lines.append(f"\n{icon} {message}" if not message.startswith(("✅", "❌")) else f"\n{message}")
     await callback.message.edit_text(
-        "\n".join(lines), reply_markup=lab_craft_kb(), parse_mode="HTML"
+        "\n".join(lines), reply_markup=lab_craft_kb(_post_multiplier), parse_mode="HTML"
     )
 
 

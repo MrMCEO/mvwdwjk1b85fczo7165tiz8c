@@ -10,10 +10,12 @@ from aiogram.enums import ParseMode
 from bot.config import get_settings
 from bot.utils.logger import setup_logging
 from bot.handlers.admin import router as admin_router
+from bot.handlers.broadcast import router as broadcast_router
 from bot.handlers.moderation import router as moderation_router
 from bot.handlers.alliance import router as alliance_router
 from bot.handlers.attack import router as attack_router
 from bot.handlers.events import router as events_router
+from bot.handlers.suggest import router as suggest_router
 from bot.handlers.immunity import router as immunity_router
 from bot.handlers.info import router as info_router
 from bot.handlers.inline import router as inline_router
@@ -33,6 +35,7 @@ from bot.handlers.text_commands import router as text_commands_router
 from bot.handlers.transfer import router as transfer_router
 from bot.handlers.virus import router as virus_router
 from bot.middlewares.callback_owner import CallbackOwnerMiddleware
+from bot.middlewares.chat_tracker import ChatTrackerMiddleware
 from bot.middlewares.db import DbSessionMiddleware
 from bot.models.base import init_db
 from bot.services.tick import start_scheduler
@@ -71,6 +74,9 @@ async def main() -> None:
     # foreign-button clicks in groups are rejected before a DB session is opened.
     dp.callback_query.middleware(CallbackOwnerMiddleware())
     dp.update.middleware(DbSessionMiddleware())
+    # ChatTracker must be AFTER DbSessionMiddleware so the session is available
+    dp.message.middleware(ChatTrackerMiddleware())
+    dp.callback_query.middleware(ChatTrackerMiddleware())
 
     # Connect routers — order matters: start first, then menu, then sections
     dp.include_router(start_router)
@@ -94,6 +100,8 @@ async def main() -> None:
     dp.include_router(transfer_router)
     # Admin router before text_commands to handle /admin, FSM states, callbacks
     dp.include_router(admin_router)
+    dp.include_router(broadcast_router)
+    dp.include_router(suggest_router)
     # Moderation commands (group-only: /ban, /mute, /unban, /unmute, /report)
     dp.include_router(moderation_router)
     # Inline-mode handler — before text_commands to avoid interception

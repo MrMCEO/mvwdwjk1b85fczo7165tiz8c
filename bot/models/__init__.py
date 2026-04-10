@@ -21,5 +21,7 @@ from bot.models.promo import PromoActivation, PromoCode  # noqa: F401
 from bot.models.referral import Referral, ReferralReward  # noqa: F401
 from bot.models.resource import Currency, ResourceTransaction, TransactionReason  # noqa: F401
 from bot.models.chat_settings import ChatReportSettings  # noqa: F401
+from bot.models.known_chat import KnownChat  # noqa: F401
+from bot.models.suggestion import SuggestBlock, Suggestion, SuggestionStatus  # noqa: F401
 from bot.models.user import User  # noqa: F401
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade  # noqa: F401

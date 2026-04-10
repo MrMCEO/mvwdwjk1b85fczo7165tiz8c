@@ -1,8 +1,10 @@
 from bot.handlers.admin import router as admin_router
+from bot.handlers.broadcast import router as broadcast_router
 from bot.handlers.moderation import router as moderation_router
 from bot.handlers.alliance import router as alliance_router
 from bot.handlers.attack import router as attack_router
 from bot.handlers.events import router as events_router
+from bot.handlers.suggest import router as suggest_router
 from bot.handlers.immunity import router as immunity_router
 from bot.handlers.info import router as info_router
 from bot.handlers.inline import router as inline_router
@@ -46,4 +48,6 @@ __all__ = [
     "transfer_router",
     "text_commands_router",
     "moderation_router",
+    "broadcast_router",
+    "suggest_router",
 ]

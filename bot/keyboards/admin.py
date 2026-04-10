@@ -40,9 +40,10 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
     # Финансы
     builder.button(text="💰 Выдать валюту", callback_data="admin_give_start",  style=ButtonStyle.SUCCESS)
     builder.button(text="📋 Промокоды",     callback_data="admin_promos",      style=ButtonStyle.PRIMARY)
-    # Ивенты
+    # Ивенты + Рассылка
     builder.button(text="🌍 Ивенты",        callback_data="admin_events",      style=ButtonStyle.SUCCESS)
-    builder.adjust(2, 2, 1)
+    builder.button(text="📢 Рассылка",      callback_data="admin_broadcast",   style=ButtonStyle.PRIMARY)
+    builder.adjust(2, 2, 2)
     return builder.as_markup()
 
 

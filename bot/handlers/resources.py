@@ -45,6 +45,9 @@ async def cb_resources_menu(callback: CallbackQuery, session: AsyncSession) -> N
 
 @router.callback_query(lambda c: c.data == "mine")
 async def cb_mine(callback: CallbackQuery, session: AsyncSession) -> None:
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     amount, message = await mine_resources(session, callback.from_user.id)
 
     balance = await get_balance(session, callback.from_user.id)
@@ -56,11 +59,13 @@ async def cb_mine(callback: CallbackQuery, session: AsyncSession) -> None:
     await callback.message.edit_text(
         text, reply_markup=resources_menu_kb(), parse_mode="HTML"
     )
-    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "daily_bonus")
 async def cb_daily_bonus(callback: CallbackQuery, session: AsyncSession) -> None:
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     amount, message = await claim_daily_bonus(session, callback.from_user.id)
 
     balance = await get_balance(session, callback.from_user.id)
@@ -72,7 +77,6 @@ async def cb_daily_bonus(callback: CallbackQuery, session: AsyncSession) -> None
     await callback.message.edit_text(
         text, reply_markup=resources_menu_kb(), parse_mode="HTML"
     )
-    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "convert_premium")

@@ -261,14 +261,17 @@ async def cb_market_buy(
         await callback.answer("❌ Неверный ID.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await purchase_listing(session, callback.from_user.id, listing_id)
 
     if success:
         await callback.message.edit_text(msg, reply_markup=market_menu_kb(), parse_mode="HTML")
     else:
-        await callback.answer(msg, show_alert=True)
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=market_menu_kb(), parse_mode="HTML"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -286,14 +289,17 @@ async def cb_market_claim(
         await callback.answer("❌ Неверный ID.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await claim_hit_contract(session, callback.from_user.id, listing_id)
 
     if success:
         await callback.message.edit_text(msg, reply_markup=market_menu_kb(), parse_mode="HTML")
     else:
-        await callback.answer(msg, show_alert=True)
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=market_menu_kb(), parse_mode="HTML"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +317,9 @@ async def cb_market_cancel(
         await callback.answer("❌ Неверный ID.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await cancel_listing(session, callback.from_user.id, listing_id)
 
     if success:
@@ -321,9 +330,9 @@ async def cb_market_cancel(
             parse_mode="HTML",
         )
     else:
-        await callback.answer(msg, show_alert=True)
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=back_button("market_my"), parse_mode="HTML"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -469,6 +478,9 @@ async def cb_market_pick_item(
         await callback.answer("❌ Неверный ID.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     # Verify ownership
     result = await session.execute(
         select(Item).where(
@@ -481,7 +493,11 @@ async def cb_market_pick_item(
     )
     item = result.scalar_one_or_none()
     if item is None:
-        await callback.answer("❌ Предмет не найден.", show_alert=True)
+        await callback.message.edit_text(
+            "❌ Предмет не найден.",
+            reply_markup=back_button("market_menu"),
+            parse_mode="HTML",
+        )
         return
 
     cfg = ITEM_CONFIG.get(item.item_type, {})
@@ -612,11 +628,18 @@ async def cb_market_pick_mutation(
         await callback.answer("❌ Неверный ID.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     # Verify it's in inventory and owned by player
     mutations = await get_inventory_mutations(session, callback.from_user.id)
     mutation = next((m for m in mutations if m.id == mutation_id), None)
     if mutation is None:
-        await callback.answer("❌ Мутация не найдена.", show_alert=True)
+        await callback.message.edit_text(
+            "❌ Мутация не найдена.",
+            reply_markup=back_button("market_menu"),
+            parse_mode="HTML",
+        )
         return
 
     cfg = MUTATION_CONFIG.get(mutation.mutation_type, {})

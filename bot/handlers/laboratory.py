@@ -108,18 +108,12 @@ async def cb_lab_craft_item(callback: CallbackQuery, session: AsyncSession) -> N
         await callback.answer("Неизвестный предмет.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, message = await craft_item(session, callback.from_user.id, item_type)
 
-    if success:
-        await callback.answer("Предмет создан!", show_alert=False)
-    else:
-        await callback.answer(
-            message.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", ""),
-            show_alert=True,
-        )
-        return
-
-    # Обновить экран крафта с результатом
+    # Build craft screen lines (shared for both success and failure)
     lines = ["🔬 <b>Крафт предметов</b>\n", "<i>Выбери предмет для создания:</i>\n"]
     for it in ItemType:
         cfg = ITEM_CONFIG[it]
@@ -127,7 +121,8 @@ async def cb_lab_craft_item(callback: CallbackQuery, session: AsyncSession) -> N
             f"{cfg['emoji']} <b>{cfg['name']}</b> — <code>{cfg['cost']}</code> 🧫\n"
             f"   <i>{cfg['desc']}</i>"
         )
-    lines.append(f"\n{message}")
+    icon = "✅" if success else "❌"
+    lines.append(f"\n{icon} {message}" if not message.startswith(("✅", "❌")) else f"\n{message}")
     await callback.message.edit_text(
         "\n".join(lines), reply_markup=lab_craft_kb(), parse_mode="HTML"
     )
@@ -187,12 +182,17 @@ async def cb_lab_use_item(
         await callback.answer("Неверный ID предмета.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, message, extra = await use_item(session, callback.from_user.id, item_id)
 
     if not success:
-        await callback.answer(
-            message.replace("<b>", "").replace("</b>", ""),
-            show_alert=True,
+        inventory = await get_inventory(session, callback.from_user.id)
+        await callback.message.edit_text(
+            f"❌ {message}\n\n📦 <b>Инвентарь</b>",
+            reply_markup=lab_inventory_kb(inventory),
+            parse_mode="HTML",
         )
         return
 
@@ -205,7 +205,6 @@ async def cb_lab_use_item(
             "Введи @username или имя пользователя цели разведки:",
             parse_mode="HTML",
         )
-        await callback.answer()
         return
 
     # Для всех прочих предметов — показываем результат и обновляем инвентарь
@@ -216,7 +215,6 @@ async def cb_lab_use_item(
         reply_markup=lab_inventory_kb(inventory),
         parse_mode="HTML",
     )
-    await callback.answer("Применено!")
 
 
 # ---------------------------------------------------------------------------

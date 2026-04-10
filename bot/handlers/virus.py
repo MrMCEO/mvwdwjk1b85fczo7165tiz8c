@@ -97,10 +97,17 @@ async def cb_upgrade_virus(callback: CallbackQuery, session: AsyncSession) -> No
         await callback.answer("Неизвестная ветка.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, message = await upgrade_virus_branch(session, callback.from_user.id, branch)
 
     if not success:
-        await callback.answer(message, show_alert=True)
+        await callback.message.edit_text(
+            f"❌ {message}",
+            reply_markup=virus_menu_kb(None),
+            parse_mode="HTML",
+        )
         return
 
     data = await get_virus_stats(session, callback.from_user.id)
@@ -111,7 +118,6 @@ async def cb_upgrade_virus(callback: CallbackQuery, session: AsyncSession) -> No
         reply_markup=virus_menu_kb(upgrades),
         parse_mode="HTML",
     )
-    await callback.answer("Прокачано!")
 
 
 @router.callback_query(lambda c: c.data == "rename_virus")

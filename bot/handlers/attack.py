@@ -147,6 +147,9 @@ async def cb_random_attack(
         )
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     target = await get_random_target(session, callback.from_user.id)
 
     if target is None:
@@ -157,7 +160,6 @@ async def cb_random_attack(
             reply_markup=attack_menu_kb(),
             parse_mode="HTML",
         )
-        await callback.answer()
         return
 
     virus_level = target.virus.level if target.virus else 0
@@ -173,7 +175,6 @@ async def cb_random_attack(
         reply_markup=attack_confirm_kb(target.tg_id),
         parse_mode="HTML",
     )
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +191,9 @@ async def cb_confirm_attack(callback: CallbackQuery, session: AsyncSession) -> N
         await callback.answer("Неверные данные атаки.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg, victim_notification = await attack_player(
         session, callback.from_user.id, victim_id
     )
@@ -200,7 +204,6 @@ async def cb_confirm_attack(callback: CallbackQuery, session: AsyncSession) -> N
         reply_markup=attack_menu_kb(),
         parse_mode="HTML",
     )
-    await callback.answer("Атака выполнена!" if success else "Атака провалена!")
 
     # Notify the victim about being infected (best-effort — ignore if blocked)
     if victim_notification:
@@ -328,22 +331,22 @@ async def cb_cure(callback: CallbackQuery, session: AsyncSession) -> None:
         await callback.answer("Неверный ID заражения.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await try_cure(session, callback.from_user.id, infection_id)
 
-    if success:
-        # Refresh the incoming infections list
-        infections = await get_active_infections_on(session, callback.from_user.id)
-        list_text = (
-            "🤒 <b>Кто заражает меня</b>\n\n"
-            f"✅ {msg}"
-        )
-        await callback.message.edit_text(
-            list_text,
-            reply_markup=infections_list_kb(infections, page=0, mode="on"),
-            parse_mode="HTML",
-        )
-    else:
-        await callback.answer(f"❌ {msg}", show_alert=True)
+    infections = await get_active_infections_on(session, callback.from_user.id)
+    icon = "✅" if success else "❌"
+    list_text = (
+        "🤒 <b>Кто заражает меня</b>\n\n"
+        f"{icon} {msg}"
+    )
+    await callback.message.edit_text(
+        list_text,
+        reply_markup=infections_list_kb(infections, page=0, mode="on"),
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(lambda c: c.data and c.data.startswith("inf_info_"))

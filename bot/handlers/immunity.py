@@ -76,12 +76,19 @@ async def cb_upgrade_immunity(callback: CallbackQuery, session: AsyncSession) ->
         await callback.answer("Неизвестная ветка.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, message = await upgrade_immunity_branch(
         session, callback.from_user.id, branch
     )
 
     if not success:
-        await callback.answer(message, show_alert=True)
+        await callback.message.edit_text(
+            f"❌ {message}",
+            reply_markup=immunity_menu_kb(None),
+            parse_mode="HTML",
+        )
         return
 
     data = await get_immunity_stats(session, callback.from_user.id)
@@ -92,4 +99,3 @@ async def cb_upgrade_immunity(callback: CallbackQuery, session: AsyncSession) ->
         reply_markup=immunity_menu_kb(upgrades),
         parse_mode="HTML",
     )
-    await callback.answer("Прокачано!")

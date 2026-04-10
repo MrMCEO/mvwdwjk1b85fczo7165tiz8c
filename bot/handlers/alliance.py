@@ -267,6 +267,9 @@ async def cb_alliance_create_confirm(
     tag = data.get("tag", "")
     await state.clear()
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await create_alliance(session, callback.from_user.id, name, tag)
 
     if success:
@@ -283,8 +286,6 @@ async def cb_alliance_create_confirm(
             reply_markup=alliance_no_clan_kb(),
             parse_mode="HTML",
         )
-
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -499,6 +500,9 @@ async def cb_alliance_kick(
         await callback.answer("❌ Неверный ID.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await kick_member(session, callback.from_user.id, target_id)
 
     if success:
@@ -517,10 +521,9 @@ async def cb_alliance_kick(
         else:
             await callback.message.edit_text(msg, parse_mode="HTML")
     else:
-        await callback.answer(msg, show_alert=True)
-        return
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=back_button("alliance_menu"), parse_mode="HTML"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -554,6 +557,9 @@ async def cb_alliance_leave(callback: CallbackQuery, session: AsyncSession) -> N
 async def cb_alliance_leave_confirm(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await leave_alliance(session, callback.from_user.id)
 
     await callback.message.edit_text(
@@ -561,7 +567,6 @@ async def cb_alliance_leave_confirm(
         reply_markup=alliance_no_clan_kb(),
         parse_mode="HTML",
     )
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -579,6 +584,9 @@ async def cb_alliance_promote(
         await callback.answer("❌ Неверный ID.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await promote_member(session, callback.from_user.id, target_id)
 
     if success:
@@ -595,10 +603,9 @@ async def cb_alliance_promote(
                 parse_mode="HTML",
             )
     else:
-        await callback.answer(msg, show_alert=True)
-        return
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=back_button("alliance_menu"), parse_mode="HTML"
+        )
 
 
 @router.callback_query(lambda c: c.data and c.data.startswith("alliance_demote_"))
@@ -610,6 +617,9 @@ async def cb_alliance_demote(
     except ValueError:
         await callback.answer("❌ Неверный ID.", show_alert=True)
         return
+
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
 
     success, msg = await demote_member(session, callback.from_user.id, target_id)
 
@@ -627,10 +637,9 @@ async def cb_alliance_demote(
                 parse_mode="HTML",
             )
     else:
-        await callback.answer(msg, show_alert=True)
-        return
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=back_button("alliance_menu"), parse_mode="HTML"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -664,6 +673,9 @@ async def cb_alliance_dissolve(
 async def cb_alliance_dissolve_confirm(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await dissolve_alliance(session, callback.from_user.id)
 
     await callback.message.edit_text(
@@ -671,7 +683,6 @@ async def cb_alliance_dissolve_confirm(
         reply_markup=alliance_no_clan_kb(),
         parse_mode="HTML",
     )
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -760,6 +771,9 @@ async def cb_alliance_join(
         await callback.answer("❌ Неверный ID альянса.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     # Check user not already in an alliance (with lock to prevent double-join race)
     existing_result = await session.execute(
         select(AllianceMember)
@@ -767,8 +781,10 @@ async def cb_alliance_join(
         .with_for_update()
     )
     if existing_result.scalar_one_or_none() is not None:
-        await callback.answer(
-            "❌ Ты уже состоишь в альянсе. Сначала покинь его.", show_alert=True
+        await callback.message.edit_text(
+            "❌ Ты уже состоишь в альянсе. Сначала покинь его.",
+            reply_markup=alliance_no_clan_kb(),
+            parse_mode="HTML",
         )
         return
 
@@ -778,21 +794,27 @@ async def cb_alliance_join(
     )
     alliance = alliance_result.scalar_one_or_none()
     if alliance is None:
-        await callback.answer("❌ Альянс не найден.", show_alert=True)
+        await callback.message.edit_text(
+            "❌ Альянс не найден.",
+            reply_markup=alliance_no_clan_kb(),
+            parse_mode="HTML",
+        )
         return
 
     # Enforce privacy: only OPEN allows direct join
     privacy_str = alliance.privacy if isinstance(alliance.privacy, str) else alliance.privacy.value
     if privacy_str == AlliancePrivacy.CLOSED.value:
-        await callback.answer(
+        await callback.message.edit_text(
             "❌ Этот альянс закрытый — вступить можно только по приглашению.",
-            show_alert=True,
+            reply_markup=alliance_no_clan_kb(),
+            parse_mode="HTML",
         )
         return
     if privacy_str == AlliancePrivacy.REQUEST.value:
-        await callback.answer(
+        await callback.message.edit_text(
             "❌ Этот альянс работает по заявкам. Нажми кнопку заявки.",
-            show_alert=True,
+            reply_markup=alliance_no_clan_kb(),
+            parse_mode="HTML",
         )
         return
 
@@ -805,8 +827,10 @@ async def cb_alliance_join(
     count: int = count_result.scalar_one()
     max_members = await get_alliance_max_members(session, alliance_id)
     if count >= max_members:
-        await callback.answer(
-            f"❌ Альянс заполнен ({count}/{max_members}).", show_alert=True
+        await callback.message.edit_text(
+            f"❌ Альянс заполнен ({count}/{max_members}).",
+            reply_markup=alliance_no_clan_kb(),
+            parse_mode="HTML",
         )
         return
 
@@ -826,7 +850,6 @@ async def cb_alliance_join(
         reply_markup=alliance_info_kb(role),
         parse_mode="HTML",
     )
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -901,6 +924,9 @@ async def cb_alliance_upgrade(
     """Perform a specific upgrade."""
     upgrade_key = callback.data[len("alliance_upgrade_"):]
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await upgrade_alliance(session, callback.from_user.id, upgrade_key)
 
     if success:
@@ -916,10 +942,9 @@ async def cb_alliance_upgrade(
         else:
             await callback.message.edit_text(msg, parse_mode="HTML")
     else:
-        await callback.answer(msg, show_alert=True)
-        return
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=back_button("alliance_upgrades"), parse_mode="HTML"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1065,6 +1090,9 @@ async def cb_alliance_convert_treasury(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
     """Convert accumulated treasury_bio into alliance_coins."""
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await convert_treasury(session, callback.from_user.id)
 
     if success:
@@ -1081,10 +1109,9 @@ async def cb_alliance_convert_treasury(
             parse_mode="HTML",
         )
     else:
-        await callback.answer(msg, show_alert=True)
-        return
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=back_button("alliance_menu"), parse_mode="HTML"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1131,6 +1158,9 @@ async def cb_set_privacy(
         await callback.answer("❌ Неизвестный режим.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await set_privacy(session, callback.from_user.id, privacy)
 
     if success:
@@ -1147,10 +1177,9 @@ async def cb_set_privacy(
                 parse_mode="HTML",
             )
     else:
-        await callback.answer(msg, show_alert=True)
-        return
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=back_button("alliance_menu"), parse_mode="HTML"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1169,6 +1198,9 @@ async def cb_alliance_request_join(
         await callback.answer("❌ Неверный ID альянса.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await request_join(session, callback.from_user.id, alliance_id)
 
     if success:
@@ -1180,10 +1212,9 @@ async def cb_alliance_request_join(
             parse_mode="HTML",
         )
     else:
-        await callback.answer(msg, show_alert=True)
-        return
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=alliance_no_clan_kb(), parse_mode="HTML"
+        )
 
 
 @router.callback_query(lambda c: c.data == "alliance_requests")
@@ -1230,6 +1261,9 @@ async def cb_req_accept(
         await callback.answer("❌ Неверный ID заявки.", show_alert=True)
         return
 
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
+
     success, msg = await handle_request(session, callback.from_user.id, request_id, accept=True)
 
     if success:
@@ -1246,10 +1280,9 @@ async def cb_req_accept(
                 parse_mode="HTML",
             )
     else:
-        await callback.answer(msg, show_alert=True)
-        return
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=back_button("alliance_menu"), parse_mode="HTML"
+        )
 
 
 @router.callback_query(lambda c: c.data and c.data.startswith("alliance_req_decline_"))
@@ -1262,6 +1295,9 @@ async def cb_req_decline(
     except ValueError:
         await callback.answer("❌ Неверный ID заявки.", show_alert=True)
         return
+
+    # Acknowledge immediately to prevent query timeout
+    await callback.answer()
 
     success, msg = await handle_request(session, callback.from_user.id, request_id, accept=False)
 
@@ -1279,10 +1315,9 @@ async def cb_req_decline(
                 parse_mode="HTML",
             )
     else:
-        await callback.answer(msg, show_alert=True)
-        return
-
-    await callback.answer()
+        await callback.message.edit_text(
+            f"❌ {msg}", reply_markup=back_button("alliance_menu"), parse_mode="HTML"
+        )
 
 
 # ---------------------------------------------------------------------------

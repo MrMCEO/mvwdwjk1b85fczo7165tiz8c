@@ -40,6 +40,7 @@ from bot.services.market import check_contract_completion
 from bot.services.mutation_effects import apply_mutation_to_attack, apply_mutation_to_defense
 from bot.services.player import DEFAULT_VIRUS_NAME
 from bot.services.premium import get_attack_cooldown, get_attack_limits
+from bot.utils.db_logger import log_event
 
 # Base damage per tick before lethality adjustments
 BASE_DAMAGE_PER_TICK: float = 5.0
@@ -314,6 +315,18 @@ async def attack_player(
 
     if not success:
         logger.info(f"Attack: {attacker_id} -> {victim_id} result='miss' reward=0")
+        await log_event(
+            session,
+            event_type="attack",
+            user_id=attacker_id,
+            message=f"Attack {attacker_id} -> {victim_id}: miss",
+            extra={
+                "attacker_id": attacker_id,
+                "victim_id": victim_id,
+                "result": "miss",
+                "chance": round(chance, 3),
+            },
+        )
         # Log the failed attempt
         attempt = AttackAttempt(
             attacker_id=attacker_id,
@@ -420,6 +433,19 @@ async def attack_player(
     await session.flush()
 
     logger.info(f"Attack: {attacker_id} -> {victim_id} result='success' reward={reward}")
+    await log_event(
+        session,
+        event_type="attack",
+        user_id=attacker_id,
+        message=f"Attack {attacker_id} -> {victim_id}: success, reward={reward}",
+        extra={
+            "attacker_id": attacker_id,
+            "victim_id": victim_id,
+            "result": "success",
+            "reward": reward,
+            "chance": round(chance, 3),
+        },
+    )
 
     # --- Check hit-contract completion ---
     await check_contract_completion(session, attacker_id, victim_id)

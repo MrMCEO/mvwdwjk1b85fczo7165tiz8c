@@ -32,6 +32,7 @@ from bot.models.user import User
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
 from bot.services.event import get_event_modifier
 from bot.services.referral import check_qualification, update_referral_activity
+from bot.utils.db_logger import log_event
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -237,6 +238,18 @@ async def upgrade_virus_branch(
     new_level = upgrade.level
     next_cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], new_level)
     logger.info(f"Upgrade: user={user_id} branch={branch_key} new_level={new_level}")
+    await log_event(
+        session,
+        event_type="upgrade",
+        user_id=user_id,
+        message=f"Upgrade: {branch_key} -> level {new_level}",
+        extra={
+            "branch": branch_key,
+            "new_level": new_level,
+            "cost": cost,
+            "type": "virus",
+        },
+    )
     return True, (
         f"Ветка «{branch_name}» прокачана до уровня {dlvl(new_level)}! "
         f"Эффект: {upgrade.effect_value:.2f}. "
@@ -334,6 +347,18 @@ async def upgrade_immunity_branch(
     new_level = upgrade.level
     next_cost = calc_upgrade_cost(cfg["base_cost"], cfg["multiplier"], new_level)
     logger.info(f"Upgrade: user={user_id} branch={branch_key} new_level={new_level}")
+    await log_event(
+        session,
+        event_type="upgrade",
+        user_id=user_id,
+        message=f"Upgrade: {branch_key} -> level {new_level}",
+        extra={
+            "branch": branch_key,
+            "new_level": new_level,
+            "cost": cost,
+            "type": "immunity",
+        },
+    )
     return True, (
         f"Ветка «{branch_name}» прокачана до уровня {dlvl(new_level)}! "
         f"Эффект: {upgrade.effect_value:.2f}. "

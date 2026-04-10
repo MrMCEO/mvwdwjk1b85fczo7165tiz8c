@@ -10,6 +10,7 @@ from bot.models.alliance import (  # noqa: F401
     JoinRequestStatus,
 )
 from bot.models.attack_log import AttackAttempt  # noqa: F401
+from bot.models.bot_log import BotLog  # noqa: F401
 from bot.models.event import Event, EventParticipant, EventType, PandemicParticipant  # noqa: F401
 from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade  # noqa: F401
 from bot.models.infection import Infection  # noqa: F401

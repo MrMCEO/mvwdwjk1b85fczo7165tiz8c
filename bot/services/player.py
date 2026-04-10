@@ -21,6 +21,7 @@ from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade
 from bot.models.infection import Infection
 from bot.models.user import User
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
+from bot.utils.db_logger import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,13 @@ async def create_player(
     await session.flush()
 
     logger.info(f"New player registered: tg_id={tg_id} username={username}")
+    await log_event(
+        session,
+        event_type="registration",
+        user_id=tg_id,
+        message=f"New player registered: {username or 'no username'}",
+        extra={"username": username},
+    )
     return user
 
 

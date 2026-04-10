@@ -40,6 +40,7 @@ from bot.services.notifications import should_notify
 from bot.services.player import DEFAULT_VIRUS_NAME
 from bot.services.premium import format_username
 from bot.services.referral import deactivate_stale_referrals
+from bot.utils.db_logger import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +227,18 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                         "Tick: infection #%d expired by duration (%d ticks). victim=%d",
                         inf.id, inf.duration_ticks, victim.tg_id,
                     )
+                    await log_event(
+                        session,
+                        event_type="infection_cured",
+                        user_id=victim.tg_id,
+                        message=f"Infection #{inf.id} expired by duration",
+                        extra={
+                            "infection_id": inf.id,
+                            "method": "expired",
+                            "attacker_id": attacker.tg_id,
+                            "duration_ticks": inf.duration_ticks,
+                        },
+                    )
                     notifications.append({
                         "user_id": victim.tg_id,
                         "notify_type": "infections",
@@ -266,6 +279,17 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                 "Tick: infection #%d cured (auto). victim=%d",
                 inf.id, victim.tg_id,
             )
+            await log_event(
+                session,
+                event_type="infection_cured",
+                user_id=victim.tg_id,
+                message=f"Infection #{inf.id} cured (auto)",
+                extra={
+                    "infection_id": inf.id,
+                    "method": "auto",
+                    "attacker_id": attacker.tg_id,
+                },
+            )
             notifications.append({
                 "user_id": victim.tg_id,
                 "notify_type": "infections",
@@ -284,6 +308,13 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
             })
 
     logger.info(f"Tick processed: {len(infections)} infections, {cured_count} cured")
+    await log_event(
+        session,
+        event_type="tick",
+        user_id=None,
+        message=f"Tick processed: {len(infections)} infections, {cured_count} cured",
+        extra={"processed": len(infections), "cured": cured_count},
+    )
     await session.flush()
     return notifications
 

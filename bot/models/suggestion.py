@@ -24,7 +24,13 @@ class Suggestion(Base):
     username: Mapped[str] = mapped_column(String(64), default="")
     text: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[SuggestionStatus] = mapped_column(
-        Enum(SuggestionStatus), default=SuggestionStatus.PENDING, index=True
+        Enum(
+            SuggestionStatus,
+            name="suggestionstatus",
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        default=SuggestionStatus.PENDING,
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), server_default=func.now(), index=True

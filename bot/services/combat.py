@@ -25,21 +25,24 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from bot.models.alliance import Alliance, AllianceMember
 from bot.models.attack_log import AttackAttempt
+from bot.models.event import EventType
 from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade
 from bot.models.infection import Infection
 from bot.models.item import ItemType
+from bot.models.mutation import Mutation, MutationType
 from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
-from bot.services.alliance import get_alliance_attack_bonus, get_alliance_defense_bonus
-from bot.services.event import get_event_modifier
+from bot.services.alliance import ALLIANCE_UPGRADE_CONFIG
+from bot.services.event import get_active_events, track_activity
 from bot.services.laboratory import calc_cost_multiplier, get_active_item_effect
 from bot.services.market import check_contract_completion
-from bot.services.mutation_effects import apply_mutation_to_attack, apply_mutation_to_defense
+from bot.services.mutation import get_active_mutations
 from bot.services.player import DEFAULT_VIRUS_NAME
-from bot.services.premium import get_attack_cooldown, get_attack_limits
+from bot.services.premium import get_perk_value
 from bot.utils.db_logger import log_event
 
 # Base damage per tick before lethality adjustments
@@ -123,6 +126,84 @@ async def _get_total_level(session: AsyncSession, user_id: int) -> int:
     return virus_total + immunity_total
 
 
+async def _load_member_with_alliance(
+    session: AsyncSession, user_id: int
+) -> AllianceMember | None:
+    """
+    Load AllianceMember + Alliance in one query using selectinload.
+
+    Returns None if the user is not in any alliance.
+    The returned AllianceMember has its .alliance relationship pre-loaded so
+    subsequent attribute access does not trigger additional DB queries.
+    """
+    result = await session.execute(
+        select(AllianceMember)
+        .options(selectinload(AllianceMember.alliance))
+        .where(AllianceMember.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+def _compute_atk_mods(mutations: list[Mutation]) -> dict:
+    """
+    Compute attack-phase modifiers from a pre-loaded list of active mutations.
+
+    Replicates the logic of apply_mutation_to_attack() without DB access.
+    """
+    attack_bonus = 0.0
+    spread_bonus = 0.0
+    stealth_bonus = 0.0
+    has_double_strike = False
+    has_plague_burst = False
+
+    for m in mutations:
+        mt = m.mutation_type
+        if mt in (MutationType.TOXIC_SPIKE, MutationType.UNSTABLE_CODE):
+            attack_bonus += m.effect_value
+        elif mt in (MutationType.RAPID_SPREAD, MutationType.SLOW_REPLICATION):
+            spread_bonus += m.effect_value
+        elif mt == MutationType.PHANTOM_STRAIN:
+            stealth_bonus += m.effect_value
+        elif mt == MutationType.DOUBLE_STRIKE and not m.is_used:
+            has_double_strike = True
+        elif mt == MutationType.PLAGUE_BURST and not m.is_used:
+            has_plague_burst = True
+
+    return {
+        "attack_mult":   1.0 + attack_bonus,
+        "spread_mult":   1.0 + spread_bonus,
+        "stealth_mult":  1.0 + stealth_bonus,
+        "double_strike": has_double_strike,
+        "plague_burst":  has_plague_burst,
+    }
+
+
+def _compute_def_mods(mutations: list[Mutation]) -> dict:
+    """
+    Compute defense-phase modifiers from a pre-loaded list of active mutations.
+
+    Replicates the logic of apply_mutation_to_defense() without DB access.
+    """
+    defense_bonus = 0.0
+    regen_bonus = 0.0
+    has_absolute = False
+
+    for m in mutations:
+        mt = m.mutation_type
+        if mt in (MutationType.ADAPTIVE_SHELL, MutationType.IMMUNE_LEAK, MutationType.ABSOLUTE_IMMUNITY):
+            defense_bonus += m.effect_value
+            if mt == MutationType.ABSOLUTE_IMMUNITY:
+                has_absolute = True
+        elif mt == MutationType.REGENERATIVE_CORE:
+            regen_bonus += m.effect_value
+
+    return {
+        "defense_mult":      1.0 + defense_bonus,
+        "regen_mult":        1.0 + regen_bonus,
+        "absolute_immunity": has_absolute,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -146,8 +227,16 @@ async def attack_player(
     if attacker_id == victim_id:
         return False, "Нельзя атаковать самого себя.", None
 
-    # --- Resolve premium-aware limits for the attacker ---
-    max_attempts, max_infections = await get_attack_limits(session, attacker_id)
+    # --- Load attacker first (with lock) so we can read premium perks synchronously ---
+    # Lock attacker row to prevent concurrent attacks from the same user
+    attacker = await _get_user(session, attacker_id, lock=True)
+    if attacker is None:
+        return False, "Атакующий игрок не найден. Создай профиль через /start.", None
+
+    # --- Resolve premium-aware limits from the already-loaded attacker (no extra DB query) ---
+    max_attempts = get_perk_value(attacker, "max_attempts_target")
+    max_infections = get_perk_value(attacker, "max_infections_hour")
+    attack_cooldown = timedelta(minutes=get_perk_value(attacker, "attack_cooldown"))
 
     # --- Rate limit: attempts on the same target per hour ---
     one_hour_ago = _now_utc() - timedelta(hours=1)
@@ -179,12 +268,7 @@ async def attack_player(
             f"Вы достигли лимита заражений ({max_infections} в час). Попробуйте позже."
         ), None
 
-    # --- Check both players exist ---
-    # Lock attacker row to prevent concurrent attacks from the same user
-    attacker = await _get_user(session, attacker_id, lock=True)
-    if attacker is None:
-        return False, "Атакующий игрок не найден. Создай профиль через /start.", None
-
+    # --- Load victim ---
     victim = await _get_user(session, victim_id)
     if victim is None:
         return False, "Жертва не найдена.", None
@@ -197,7 +281,6 @@ async def attack_player(
     # Using AttackAttempt (not Infection) ensures the timer resets on every
     # actual attack, including circular-infection skips where no Infection
     # row is written.
-    attack_cooldown = await get_attack_cooldown(session, attacker_id)
     last_attempt_result = await session.execute(
         select(AttackAttempt)
         .where(AttackAttempt.attacker_id == attacker_id)
@@ -257,23 +340,40 @@ async def attack_player(
     detection_effect = _upgrade_effect(immunity_upgrades, ImmunityBranch.DETECTION)
     effective_detection = max(0.0, (immunity.detection_power + detection_effect) - stealth_effect)
 
-    # --- Event modifiers ---
-    can_attack = await get_event_modifier(session, "can_attack")
-    if not can_attack:
+    # --- Load active events ONCE and compute both modifiers from the same list ---
+    active_events = await get_active_events(session)
+    active_event_types = {e.event_type for e in active_events}
+
+    if EventType.CEASEFIRE in active_event_types:
         return False, "Сейчас действует перемирие (🕊 Ceasefire). Атаки запрещены.", None
 
-    attack_chance_event_mult = await get_event_modifier(session, "attack_chance_mult")
+    attack_chance_event_mult = 1.5 if EventType.PLAGUE_SEASON in active_event_types else 1.0
 
-    # --- Mutation modifiers ---
-    atk_mods = await apply_mutation_to_attack(session, attacker_id)
-    def_mods = await apply_mutation_to_defense(session, victim_id)
+    # --- Load mutations ONCE per player, then compute modifiers in Python ---
+    attacker_mutations = await get_active_mutations(session, attacker_id)
+    victim_mutations = await get_active_mutations(session, victim_id)
+    atk_mods = _compute_atk_mods(attacker_mutations)
+    def_mods = _compute_def_mods(victim_mutations)
 
     if def_mods.get("absolute_immunity"):
         return False, "Цель под защитой Абсолютного иммунитета! Атака невозможна.", None
 
-    # --- Alliance bonuses ---
-    atk_alliance_bonus = await get_alliance_attack_bonus(session, attacker_id)
-    def_alliance_bonus = await get_alliance_defense_bonus(session, victim_id)
+    # --- Alliance bonuses — load member+alliance ONCE per player (2 queries total) ---
+    attacker_member = await _load_member_with_alliance(session, attacker_id)
+    victim_member = await _load_member_with_alliance(session, victim_id)
+
+    atk_alliance_bonus = (
+        attacker_member.alliance.morale_level
+        * ALLIANCE_UPGRADE_CONFIG["morale"]["effect_per_level"]
+        if attacker_member is not None and attacker_member.alliance is not None
+        else 0.0
+    )
+    def_alliance_bonus = (
+        victim_member.alliance.shield_level
+        * ALLIANCE_UPGRADE_CONFIG["shield"]["effect_per_level"]
+        if victim_member is not None and victim_member.alliance is not None
+        else 0.0
+    )
 
     # --- Laboratory item effects ---
     has_bio_bomb = await get_active_item_effect(session, attacker_id, ItemType.BIO_BOMB)
@@ -454,7 +554,6 @@ async def attack_player(
     await check_contract_completion(session, attacker_id, victim_id)
 
     # Track activity for event leaderboards
-    from bot.services.event import track_activity
     await track_activity(session, attacker_id, "attack")
 
     # Virus display suffix — shown only when a custom name is set.

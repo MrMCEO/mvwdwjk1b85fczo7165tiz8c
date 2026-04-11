@@ -124,17 +124,20 @@ def _fmt_cooldown(seconds: int) -> str:
 
 async def mine_resources(
     session: AsyncSession, user_id: int
-) -> tuple[int, str]:
+) -> tuple[int, dict, str]:
     """
     Try to mine bio_coins for *user_id*.
 
-    Returns (amount, message):
-      - amount == 0  → cooldown still active, message contains time left
-      - amount  > 0  → successful mining, message is a success string
+    Returns (amount, balance, message):
+      - amount == 0  → cooldown still active, message contains time left;
+                       balance dict will be empty on user-not-found, or current
+                       balances otherwise
+      - amount  > 0  → successful mining, message is a success string;
+                       balance dict has bio_coins/premium_coins post-update
     """
     user = await _get_user(session, user_id)
     if user is None:
-        return 0, "Пользователь не найден."
+        return 0, {}, "Пользователь не найден."
 
     # --- Cooldown check via last MINING transaction ---
     mining_cooldown = await get_mining_cooldown(session, user_id)
@@ -142,7 +145,8 @@ async def mine_resources(
     if last_tx is not None:
         seconds = _seconds_left(last_tx.created_at, mining_cooldown)
         if seconds > 0:
-            return 0, (
+            balance = {"bio_coins": user.bio_coins, "premium_coins": user.premium_coins}
+            return 0, balance, (
                 f"Добыча уже идёт. Следующая добыча через {_fmt_cooldown(seconds)}."
             )
 
@@ -184,12 +188,13 @@ async def mine_resources(
     from bot.services.event import track_activity
     await track_activity(session, user_id, "mine")
 
-    return amount, f"Добыто {amount} 🧫 BioCoins! Баланс: {user.bio_coins} 🧫 BioCoins."
+    balance = {"bio_coins": user.bio_coins, "premium_coins": user.premium_coins}
+    return amount, balance, f"Добыто {amount} 🧫 BioCoins! Баланс: {user.bio_coins} 🧫 BioCoins."
 
 
 async def claim_daily_bonus(
     session: AsyncSession, user_id: int
-) -> tuple[int, str]:
+) -> tuple[int, dict, str]:
     """
     Claim the daily bonus for *user_id*.
 
@@ -198,11 +203,13 @@ async def claim_daily_bonus(
       - If more than 48 h have passed               → streak resets to 1.
       - First ever claim                             → streak = 1.
 
-    Returns (amount, message).
+    Returns (amount, balance, message):
+      - amount == 0  → cooldown still active; balance has current coins
+      - amount  > 0  → success; balance has post-credit coins
     """
     user = await _get_user(session, user_id)
     if user is None:
-        return 0, "Пользователь не найден."
+        return 0, {}, "Пользователь не найден."
 
     last_tx = await _last_transaction(session, user_id, TransactionReason.DAILY_BONUS)
     now = _now_utc()
@@ -211,7 +218,8 @@ async def claim_daily_bonus(
     if last_tx is not None:
         seconds = _seconds_left(last_tx.created_at, DAILY_COOLDOWN)
         if seconds > 0:
-            return 0, (
+            balance = {"bio_coins": user.bio_coins, "premium_coins": user.premium_coins}
+            return 0, balance, (
                 f"Ежедневный бонус уже получен. "
                 f"Следующий через {_fmt_cooldown(seconds)}."
             )
@@ -263,7 +271,8 @@ async def claim_daily_bonus(
         if new_streak > 1
         else ""
     )
-    return amount, (
+    balance = {"bio_coins": user.bio_coins, "premium_coins": user.premium_coins}
+    return amount, balance, (
         f"Ежедневный бонус получен! +{amount} 🧫 BioCoins{streak_msg}. "
         f"Баланс: {user.bio_coins} 🧫 BioCoins."
     )

@@ -125,17 +125,10 @@ async def cb_lab_craft_item(callback: CallbackQuery, session: AsyncSession) -> N
     # Acknowledge immediately to prevent query timeout
     await callback.answer()
 
-    success, message = await craft_item(session, callback.from_user.id, item_type)
-
-    # Build craft screen lines (shared for both success and failure)
-    # Recalculate multiplier with updated balance (after potential deduction)
-    _post_total_level = await _get_total_level_for_user(session, callback.from_user.id)
-    _post_user_result = await session.execute(
-        select(User).where(User.tg_id == callback.from_user.id)
+    # craft_item returns the post-deduction multiplier so we skip extra queries
+    success, message, _post_multiplier = await craft_item(
+        session, callback.from_user.id, item_type
     )
-    _post_user = _post_user_result.scalar_one_or_none()
-    _post_balance = _post_user.bio_coins if _post_user is not None else 0
-    _post_multiplier = calc_cost_multiplier(_post_total_level, _post_balance)
 
     lines = ["🔬 <b>Крафт предметов</b>\n", "<i>Выбери предмет для создания:</i>\n"]
     for it in ItemType:

@@ -25,9 +25,10 @@ async def test_craft_item(session: AsyncSession):
     cost = ITEM_CONFIG[ItemType.VACCINE]["cost"]
     await _give_coins(session, 7001, cost + 100)
 
-    ok, msg = await craft_item(session, user_id=7001, item_type=ItemType.VACCINE)
+    ok, msg, multiplier = await craft_item(session, user_id=7001, item_type=ItemType.VACCINE)
     assert ok is True
     assert "Вакцина" in msg or "скрафчен" in msg
+    assert multiplier >= 1.0
 
     # Check balance reduced
     result = await session.execute(select(User).where(User.tg_id == 7001))
@@ -40,7 +41,7 @@ async def test_craft_not_enough_coins(session: AsyncSession):
     await create_player(session, tg_id=7002, username="crafter2")
     # Leave bio_coins at 0
 
-    ok, msg = await craft_item(session, user_id=7002, item_type=ItemType.ANTIDOTE)
+    ok, msg, _multiplier = await craft_item(session, user_id=7002, item_type=ItemType.ANTIDOTE)
     assert ok is False
     assert "Недостаточно" in msg
 

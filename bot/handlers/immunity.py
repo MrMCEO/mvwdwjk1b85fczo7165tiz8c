@@ -79,7 +79,7 @@ async def cb_upgrade_immunity(callback: CallbackQuery, session: AsyncSession) ->
     # Acknowledge immediately to prevent query timeout
     await callback.answer()
 
-    success, message = await upgrade_immunity_branch(
+    success, message, stats = await upgrade_immunity_branch(
         session, callback.from_user.id, branch
     )
 
@@ -91,7 +91,8 @@ async def cb_upgrade_immunity(callback: CallbackQuery, session: AsyncSession) ->
         )
         return
 
-    data = await get_immunity_stats(session, callback.from_user.id)
+    # stats is pre-built from the session identity map — no extra DB query needed
+    data = stats if stats is not None else await get_immunity_stats(session, callback.from_user.id)
     text = _fmt_immunity_stats(data)
     upgrades = data.get("upgrades")
     await callback.message.edit_text(

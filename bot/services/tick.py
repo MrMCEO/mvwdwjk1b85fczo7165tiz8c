@@ -27,6 +27,7 @@ from sqlalchemy.orm import selectinload
 
 from html import escape
 
+from bot.models.alliance import Alliance, AllianceMember
 from bot.models.base import AsyncSessionFactory
 from bot.models.immunity import Immunity, ImmunityBranch, ImmunityUpgrade
 from bot.models.infection import Infection
@@ -34,9 +35,7 @@ from bot.models.resource import Currency as CurrencyType
 from bot.models.resource import ResourceTransaction, TransactionReason
 from bot.models.user import User
 from bot.models.virus import Virus, VirusUpgrade
-from bot.services.alliance import get_alliance_regen_bonus
 from bot.services.event import expire_events
-from bot.services.notifications import should_notify
 from bot.services.player import DEFAULT_VIRUS_NAME
 from bot.services.premium import format_username
 from bot.services.referral import deactivate_stale_referrals
@@ -63,6 +62,10 @@ ATTACKER_SHARE: float = 0.50
 # Total expected loss: 5 * 12 = 60 bio_coins. Cure cost: 5 * 8 = 40.
 # So manual cure IS worth it — good decision point for the player.
 BASE_CURE_CHANCE: float = 0.05
+
+# Mirrors ALLIANCE_UPGRADE_CONFIG["regen"]["effect_per_level"] from alliance.py.
+# Kept here to avoid importing that dict just for a scalar constant.
+_ALLIANCE_REGEN_EFFECT_PER_LEVEL: float = 0.01
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -119,6 +122,28 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
         return notifications
 
     logger.info("Tick: processing %d active infection(s).", len(infections))
+
+    # --- Bulk-load alliance regen bonuses for all victims (Fix 1) ---
+    # get_alliance_regen_bonus() performs 2 DB round-trips per victim.
+    # A single query here fetches all relevant AllianceMember rows at once,
+    # with their Alliance eagerly loaded via selectinload (1 extra batch query),
+    # eliminating N×2 queries in favour of 2 total.
+    victim_ids = {inf.victim_id for inf in infections}
+    members_result = await session.execute(
+        select(AllianceMember)
+        .options(selectinload(AllianceMember.alliance))
+        .where(AllianceMember.user_id.in_(victim_ids))
+    )
+    _alliance_members_by_victim: dict[int, AllianceMember] = {
+        m.user_id: m for m in members_result.scalars().all()
+    }
+
+    def _get_alliance_regen_bonus(victim_id: int) -> float:
+        """Return pre-loaded alliance regen bonus without any DB access."""
+        member = _alliance_members_by_victim.get(victim_id)
+        if member is None or member.alliance is None:
+            return 0.0
+        return member.alliance.regen_level * _ALLIANCE_REGEN_EFFECT_PER_LEVEL
 
     cured_count = 0
 
@@ -268,7 +293,7 @@ async def process_infection_tick(session: AsyncSession) -> list[dict]:
                 if u.branch == ImmunityBranch.REGENERATION and u.level > 0:
                     regen_bonus = u.effect_value
                     break
-        alliance_regen = await get_alliance_regen_bonus(session, victim.tg_id)
+        alliance_regen = _get_alliance_regen_bonus(victim.tg_id)
         cure_chance = BASE_CURE_CHANCE + recovery_speed + regen_bonus + alliance_regen
         cure_chance = max(0.0, min(0.60, cure_chance))  # cap at 60% — infection should always have some duration
 
@@ -356,14 +381,27 @@ async def start_scheduler(bot) -> None:  # bot: aiogram.Bot
                 logger.exception("Scheduler: tick failed, transaction rolled back.")
                 return
 
-        # Send notifications outside the DB session (check user prefs first)
+        # Send notifications outside the DB session (check user prefs first).
+        # Fix 2: bulk-fetch all notification recipients in one query instead of
+        # calling should_notify() (1 SELECT each) per notification.
         sent_count = 0
         async with AsyncSessionFactory() as notify_session:
+            note_user_ids = {n["user_id"] for n in notifications}
+            users_result = await notify_session.execute(
+                select(User).where(User.tg_id.in_(note_user_ids))
+            )
+            _notify_users_by_id: dict[int, User] = {
+                u.tg_id: u for u in users_result.scalars().all()
+            }
+
             for note in notifications:
                 notify_type = note.get("notify_type")
                 if notify_type:
-                    allowed = await should_notify(notify_session, note["user_id"], notify_type)
-                    if not allowed:
+                    user = _notify_users_by_id.get(note["user_id"])
+                    if user is None:
+                        continue
+                    # Replicate should_notify() logic inline (no DB access needed).
+                    if not bool(getattr(user, f"notify_{notify_type}", True)):
                         continue
                 try:
                     await bot.send_message(

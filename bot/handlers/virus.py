@@ -100,7 +100,7 @@ async def cb_upgrade_virus(callback: CallbackQuery, session: AsyncSession) -> No
     # Acknowledge immediately to prevent query timeout
     await callback.answer()
 
-    success, message = await upgrade_virus_branch(session, callback.from_user.id, branch)
+    success, message, stats = await upgrade_virus_branch(session, callback.from_user.id, branch)
 
     if not success:
         await callback.message.edit_text(
@@ -110,7 +110,8 @@ async def cb_upgrade_virus(callback: CallbackQuery, session: AsyncSession) -> No
         )
         return
 
-    data = await get_virus_stats(session, callback.from_user.id)
+    # stats is pre-built from the session identity map — no extra DB query needed
+    data = stats if stats is not None else await get_virus_stats(session, callback.from_user.id)
     text = _fmt_virus_stats(data)
     upgrades = data.get("upgrades")
     await callback.message.edit_text(

@@ -157,24 +157,27 @@ async def upgrade_virus_branch(
     session: AsyncSession,
     user_id: int,
     branch: str,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, dict | None]:
     """
     Upgrade a virus branch by one level for *user_id*.
 
-    Returns (success, message).
+    Returns (success, message, stats_dict):
+      - On failure: stats_dict is None.
+      - On success: stats_dict matches the shape returned by get_virus_stats(),
+        built from already-loaded session objects (no extra queries).
     """
     branch_key = branch.upper()
     ok, err = _validate_branch("virus", branch_key)
     if not ok:
-        return False, err
+        return False, err, None
 
     user = await _get_user(session, user_id)
     if user is None:
-        return False, "Пользователь не найден."
+        return False, "Пользователь не найден.", None
 
     virus = await _get_virus(session, user_id)
     if virus is None:
-        return False, "У тебя ещё нет вируса. Создай его сначала."
+        return False, "У тебя ещё нет вируса. Создай его сначала.", None
 
     virus_branch_enum = VirusBranch[branch_key]
     upgrade = await _get_virus_upgrade(session, virus.id, virus_branch_enum)
@@ -191,7 +194,7 @@ async def upgrade_virus_branch(
     if user.bio_coins < cost:
         return False, (
             f"Недостаточно 🧫 BioCoins. Нужно {cost}, у тебя {user.bio_coins}."
-        )
+        ), None
 
     # Deduct coins
     user.bio_coins -= cost
@@ -221,10 +224,11 @@ async def upgrade_virus_branch(
     await session.flush()
 
     # Пересчитать уровень вируса = сумма уровней всех веток
-    all_upgrades = await session.execute(
+    all_upgrades_result = await session.execute(
         select(VirusUpgrade).where(VirusUpgrade.virus_id == virus.id)
     )
-    virus.level = sum(u.level for u in all_upgrades.scalars().all())
+    all_upgrades_rows = all_upgrades_result.scalars().all()
+    virus.level = sum(u.level for u in all_upgrades_rows)
 
     # Реферальная программа: обновить активность и проверить квалификацию
     await update_referral_activity(session, user_id)
@@ -250,11 +254,41 @@ async def upgrade_virus_branch(
             "type": "virus",
         },
     )
+
+    # Build stats dict from already-loaded objects — avoids a second DB round-trip
+    upgrades_by_branch: dict[str, VirusUpgrade] = {
+        row.branch.value: row for row in all_upgrades_rows
+    }
+    upgrades_dict: dict[str, dict] = {}
+    for bk, bcfg in UPGRADE_CONFIG["virus"].items():
+        row = upgrades_by_branch.get(bk)
+        cur_lvl = row.level if row is not None else 0
+        eff_val = row.effect_value if row is not None else 0.0
+        nc = calc_upgrade_cost(bcfg["base_cost"], bcfg["multiplier"], cur_lvl)
+        upgrades_dict[bk] = {
+            "name": _VIRUS_BRANCH_NAMES[bk],
+            "level": cur_lvl,
+            "effect_value": eff_val,
+            "next_cost": nc,
+        }
+    stats = {
+        "virus": {
+            "id": virus.id,
+            "name": virus.name,
+            "name_entities_json": virus.name_entities_json,
+            "level": virus.level,
+            "attack_power": virus.attack_power,
+            "spread_rate": virus.spread_rate,
+            "mutation_points": virus.mutation_points,
+        },
+        "upgrades": upgrades_dict,
+    }
+
     return True, (
         f"Ветка «{branch_name}» прокачана до уровня {dlvl(new_level)}! "
         f"Эффект: {upgrade.effect_value:.2f}. "
         f"Потрачено: {cost} 🧫 BioCoins. Следующий уровень: {next_cost} 🧫 BioCoins."
-    )
+    ), stats
 
 
 # ---------------------------------------------------------------------------
@@ -266,24 +300,27 @@ async def upgrade_immunity_branch(
     session: AsyncSession,
     user_id: int,
     branch: str,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, dict | None]:
     """
     Upgrade an immunity branch by one level for *user_id*.
 
-    Returns (success, message).
+    Returns (success, message, stats_dict):
+      - On failure: stats_dict is None.
+      - On success: stats_dict matches the shape returned by get_immunity_stats(),
+        built from already-loaded session objects (no extra queries).
     """
     branch_key = branch.upper()
     ok, err = _validate_branch("immunity", branch_key)
     if not ok:
-        return False, err
+        return False, err, None
 
     user = await _get_user(session, user_id)
     if user is None:
-        return False, "Пользователь не найден."
+        return False, "Пользователь не найден.", None
 
     immunity = await _get_immunity(session, user_id)
     if immunity is None:
-        return False, "У тебя ещё нет иммунитета. Создай его сначала."
+        return False, "У тебя ещё нет иммунитета. Создай его сначала.", None
 
     immunity_branch_enum = ImmunityBranch[branch_key]
     upgrade = await _get_immunity_upgrade(session, immunity.id, immunity_branch_enum)
@@ -300,7 +337,7 @@ async def upgrade_immunity_branch(
     if user.bio_coins < cost:
         return False, (
             f"Недостаточно 🧫 BioCoins. Нужно {cost}, у тебя {user.bio_coins}."
-        )
+        ), None
 
     # Deduct coins
     user.bio_coins -= cost
@@ -330,10 +367,11 @@ async def upgrade_immunity_branch(
     await session.flush()
 
     # Пересчитать уровень иммунитета = сумма уровней всех веток
-    all_imm_upgrades = await session.execute(
+    all_imm_upgrades_result = await session.execute(
         select(ImmunityUpgrade).where(ImmunityUpgrade.immunity_id == immunity.id)
     )
-    immunity.level = sum(u.level for u in all_imm_upgrades.scalars().all())
+    all_imm_upgrades_rows = all_imm_upgrades_result.scalars().all()
+    immunity.level = sum(u.level for u in all_imm_upgrades_rows)
 
     # Реферальная программа: обновить активность и проверить квалификацию
     await update_referral_activity(session, user_id)
@@ -359,11 +397,42 @@ async def upgrade_immunity_branch(
             "type": "immunity",
         },
     )
+
+    # Build stats dict from already-loaded objects — avoids a second DB round-trip
+    upgrades_by_branch: dict[str, ImmunityUpgrade] = {
+        row.branch.value: row for row in all_imm_upgrades_rows
+    }
+    upgrades_dict: dict[str, dict] = {}
+    for bk, bcfg in UPGRADE_CONFIG["immunity"].items():
+        row = upgrades_by_branch.get(bk)
+        cur_lvl = row.level if row is not None else 0
+        eff_val = row.effect_value if row is not None else 0.0
+        nc = calc_upgrade_cost(bcfg["base_cost"], bcfg["multiplier"], cur_lvl)
+        upgrades_dict[bk] = {
+            "name": _IMMUNITY_BRANCH_NAMES[bk],
+            "level": cur_lvl,
+            "effect_value": eff_val,
+            "next_cost": nc,
+        }
+    barrier_bonus = upgrades_dict.get("BARRIER", {}).get("effect_value", 0.0)
+    detection_bonus = upgrades_dict.get("DETECTION", {}).get("effect_value", 0.0)
+    regen_bonus = upgrades_dict.get("REGENERATION", {}).get("effect_value", 0.0)
+    stats = {
+        "immunity": {
+            "id": immunity.id,
+            "level": immunity.level,
+            "resistance": immunity.resistance + barrier_bonus,
+            "detection_power": immunity.detection_power + detection_bonus,
+            "recovery_speed": immunity.recovery_speed + regen_bonus,
+        },
+        "upgrades": upgrades_dict,
+    }
+
     return True, (
         f"Ветка «{branch_name}» прокачана до уровня {dlvl(new_level)}! "
         f"Эффект: {upgrade.effect_value:.2f}. "
         f"Потрачено: {cost} 🧫 BioCoins. Следующий уровень: {next_cost} 🧫 BioCoins."
-    )
+    ), stats
 
 
 # ---------------------------------------------------------------------------

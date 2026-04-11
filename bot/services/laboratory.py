@@ -96,11 +96,14 @@ async def craft_item(
     session: AsyncSession,
     user_id: int,
     item_type: ItemType,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, float]:
     """
     Craft an item for *user_id* by spending bio_coins.
 
-    Returns (success, message).
+    Returns (success, message, new_multiplier):
+      - new_multiplier is the cost multiplier recalculated after the deduction
+        (or the pre-deduction multiplier on failure), so the caller can refresh
+        the craft list without an extra DB round-trip.
     """
     cfg = ITEM_CONFIG[item_type]
     base_cost: int = cfg["cost"]
@@ -109,7 +112,7 @@ async def craft_item(
 
     user = await _get_user(session, user_id)
     if user is None:
-        return False, "Игрок не найден."
+        return False, "Игрок не найден.", 1.0
 
     # Scale cost by player power
     total_level = await _get_total_level_for_user(session, user_id)
@@ -123,7 +126,7 @@ async def craft_item(
             f"Нужно: <b>{cost}</b> 🧫 BioCoins (x{multiplier:.1f} от базовой цены {base_cost})\n"
             f"У тебя: <b>{user.bio_coins}</b> 🧫 BioCoins\n"
             f"Не хватает: <b>{shortage}</b> 🧫 BioCoins"
-        )
+        ), multiplier
 
     # Списать монеты
     user.bio_coins -= cost
@@ -146,12 +149,15 @@ async def craft_item(
 
     await session.flush()
 
+    # Recalculate multiplier with post-deduction balance (level unchanged)
+    post_multiplier = calc_cost_multiplier(total_level, user.bio_coins)
+
     return True, (
         f"{emoji} <b>{name}</b> успешно скрафчен!\n"
         f"Потрачено: <b>{cost}</b> 🧫 BioCoins (x{multiplier:.1f})\n"
         f"Баланс: <b>{user.bio_coins}</b> 🧫 BioCoins\n\n"
         "Предмет добавлен в инвентарь."
-    )
+    ), post_multiplier
 
 
 async def get_inventory(session: AsyncSession, user_id: int) -> list[dict]:

@@ -54,10 +54,12 @@ async def test_upgrade_virus_branch(session: AsyncSession):
     user.bio_coins = 10_000
     await session.flush()
 
-    success, msg = await upgrade_virus_branch(session, user_id=3001, branch="LETHALITY")
+    success, msg, stats = await upgrade_virus_branch(session, user_id=3001, branch="LETHALITY")
 
     assert success is True
     assert "прокачана до уровня 1" in msg
+    assert stats is not None
+    assert "upgrades" in stats
 
     # Verify upgrade row in DB
     from sqlalchemy import select as sa_select
@@ -87,10 +89,11 @@ async def test_upgrade_not_enough_coins(session: AsyncSession):
     user.bio_coins = 0
     await session.flush()
 
-    success, msg = await upgrade_virus_branch(session, user_id=3002, branch="LETHALITY")
+    success, msg, stats = await upgrade_virus_branch(session, user_id=3002, branch="LETHALITY")
 
     assert success is False
     assert "Недостаточно" in msg
+    assert stats is None
 
 
 async def test_upgrade_cost_deducted_correctly(session: AsyncSession):
@@ -123,10 +126,12 @@ async def test_upgrade_immunity_branch(session: AsyncSession):
     user.bio_coins = 10_000
     await session.flush()
 
-    success, msg = await upgrade_immunity_branch(session, user_id=3010, branch="BARRIER")
+    success, msg, stats = await upgrade_immunity_branch(session, user_id=3010, branch="BARRIER")
 
     assert success is True
     assert "прокачана до уровня 1" in msg
+    assert stats is not None
+    assert "upgrades" in stats
 
     from bot.models.immunity import Immunity
     imm_res = await session.execute(select(Immunity).where(Immunity.owner_id == 3010))
@@ -154,9 +159,10 @@ async def test_upgrade_immunity_not_enough_coins(session: AsyncSession):
     user.bio_coins = 0
     await session.flush()
 
-    success, msg = await upgrade_immunity_branch(session, user_id=3011, branch="BARRIER")
+    success, msg, stats = await upgrade_immunity_branch(session, user_id=3011, branch="BARRIER")
     assert success is False
     assert "Недostаточно" in msg or "Недостаточно" in msg
+    assert stats is None
 
 
 async def test_get_virus_stats(session: AsyncSession):

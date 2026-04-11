@@ -530,6 +530,49 @@ async def clear_prefix(session: AsyncSession, user_id: int) -> tuple[bool, str]:
     return True, "✅ Префикс сброшен."
 
 
+# ---------------------------------------------------------------------------
+# Sync helpers for callers that already have a loaded User object
+# ---------------------------------------------------------------------------
+
+
+def _get_perk_config_from_user(user: User) -> dict:
+    """
+    Synchronous version of _get_perk_config that uses an already-loaded User.
+
+    For legacy rows (premium_until active, status=FREE) returns _LEGACY_PREMIUM_CONFIG.
+    For all other users returns STATUS_CONFIG[effective_status].
+    No DB access — suitable for use inside a transaction where the User is
+    already loaded with a lock.
+    """
+    if _is_legacy_premium(user):
+        return _LEGACY_PREMIUM_CONFIG
+
+    stored = _parse_status(getattr(user, "status", None))
+
+    # BIO_LEGEND and OWNER are permanent — no expiry check needed
+    if stored in (UserStatus.BIO_LEGEND, UserStatus.OWNER):
+        return STATUS_CONFIG[stored]
+
+    # Paid statuses: check premium_until
+    if stored != UserStatus.FREE:
+        if user.premium_until is not None and user.premium_until > _now_utc():
+            return STATUS_CONFIG[stored]
+        # Subscription expired — fall back to FREE
+        return STATUS_CONFIG[UserStatus.FREE]
+
+    return STATUS_CONFIG[UserStatus.FREE]
+
+
+def get_perk_value(user: User, key: str):
+    """
+    Get a single perk value from an already-loaded User object (no DB query).
+
+    Equivalent to (await _get_perk_config(session, user.tg_id))[key] but
+    synchronous and reuses the already-loaded User.
+    """
+    return _get_perk_config_from_user(user)[key]
+
+
 async def get_prefix(session: AsyncSession, user_id: int) -> str:
     """Вернуть сохранённый префикс пользователя или пустую строку."""
     user = await _get_user(session, user_id)

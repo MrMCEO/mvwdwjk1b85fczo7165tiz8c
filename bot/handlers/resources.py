@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.common import back_button
 from bot.keyboards.resources import resources_menu_kb
 from bot.services.donation import EXCHANGE_RATE, convert_premium_to_bio
-from bot.services.resource import claim_daily_bonus, get_balance, mine_resources
+from bot.services.resource import claim_daily_bonus, mine_resources
 from bot.utils.chat import smart_reply
 
 router = Router(name="resources")
@@ -48,9 +48,8 @@ async def cb_mine(callback: CallbackQuery, session: AsyncSession) -> None:
     # Acknowledge immediately to prevent query timeout
     await callback.answer()
 
-    amount, message = await mine_resources(session, callback.from_user.id)
+    amount, balance, message = await mine_resources(session, callback.from_user.id)
 
-    balance = await get_balance(session, callback.from_user.id)
     header = _fmt_resources(balance) if balance else ""
 
     icon = "✅" if amount > 0 else "⏳"
@@ -66,9 +65,8 @@ async def cb_daily_bonus(callback: CallbackQuery, session: AsyncSession) -> None
     # Acknowledge immediately to prevent query timeout
     await callback.answer()
 
-    amount, message = await claim_daily_bonus(session, callback.from_user.id)
+    amount, balance, message = await claim_daily_bonus(session, callback.from_user.id)
 
-    balance = await get_balance(session, callback.from_user.id)
     header = _fmt_resources(balance) if balance else ""
 
     icon = "🎁" if amount > 0 else "⏳"

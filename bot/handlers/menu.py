@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.main import main_menu_kb
-from bot.services.player import get_player_profile
+from bot.services.player import get_menu_header_data
 
 router = Router(name="menu")
 
@@ -13,8 +13,7 @@ router = Router(name="menu")
 async def _build_main_menu_text(callback: CallbackQuery, session: AsyncSession) -> str:
     """Compose the main menu header with live player stats."""
     tg_id = callback.from_user.id
-    profile = await get_player_profile(session, tg_id)
-    u = profile.get("user", {})
+    u = await get_menu_header_data(session, tg_id)
 
     bio_coins: int = u.get("bio_coins", 0)
     premium_coins: int = u.get("premium_coins", 0)

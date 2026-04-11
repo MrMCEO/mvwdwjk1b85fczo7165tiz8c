@@ -21,6 +21,10 @@ engine = create_async_engine(
     **({
         "pool_size": 20,
         "max_overflow": 10,
+        "pool_pre_ping": True,
+        "pool_recycle": 1800,
+        "pool_timeout": 30,
+        "connect_args": {"statement_cache_size": 0, "prepared_statement_cache_size": 0},
     } if _is_postgres else {}),
 )
 

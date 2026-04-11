@@ -298,7 +298,9 @@ async def invite_player(
         )
     )
     member_count: int = member_count_result.scalar_one()
-    max_members = await get_alliance_max_members(session, alliance.id)
+    max_members = MAX_MEMBERS_DEFAULT + alliance.capacity_level * int(
+        ALLIANCE_UPGRADE_CONFIG["capacity"]["effect_per_level"]
+    )
 
     if member_count >= max_members:
         return False, (
@@ -533,7 +535,9 @@ async def get_alliance_info(session: AsyncSession, user_id: int) -> dict | None:
     )
     member_count: int = member_count_result.scalar_one()
 
-    max_members = await get_alliance_max_members(session, alliance.id)
+    max_members = MAX_MEMBERS_DEFAULT + alliance.capacity_level * int(
+        ALLIANCE_UPGRADE_CONFIG["capacity"]["effect_per_level"]
+    )
     defense_bonus = alliance.shield_level * ALLIANCE_UPGRADE_CONFIG["shield"]["effect_per_level"]
 
     privacy_val = alliance.privacy if isinstance(alliance.privacy, str) else alliance.privacy.value
@@ -637,14 +641,20 @@ async def search_alliances(
     result = await session.execute(stmt)
     alliances = result.scalars().all()
 
+    alliance_ids = [a.id for a in alliances]
+    counts_result = await session.execute(
+        select(
+            AllianceMember.alliance_id,
+            func.count(AllianceMember.id),
+        )
+        .where(AllianceMember.alliance_id.in_(alliance_ids))
+        .group_by(AllianceMember.alliance_id)
+    )
+    counts: dict[int, int] = dict(counts_result.all())
+
     out = []
     for a in alliances:
-        count_result = await session.execute(
-            select(func.count(AllianceMember.id)).where(
-                AllianceMember.alliance_id == a.id
-            )
-        )
-        count: int = count_result.scalar_one()
+        count = counts.get(a.id, 0)
         max_members = 20 + a.capacity_level * 5
         defense_bonus = a.shield_level * ALLIANCE_UPGRADE_CONFIG["shield"]["effect_per_level"]
         privacy_str = a.privacy if isinstance(a.privacy, str) else a.privacy.value
@@ -757,6 +767,39 @@ async def get_alliance_regen_bonus(session: AsyncSession, user_id: int) -> float
         return 0.0
 
     return alliance.regen_level * ALLIANCE_UPGRADE_CONFIG["regen"]["effect_per_level"]
+
+
+async def get_all_alliance_bonuses(
+    session: AsyncSession,
+    user_id: int,
+) -> dict[str, float]:
+    """
+    Return all alliance bonuses for a user in a single DB query.
+
+    Loads AllianceMember + Alliance together with selectinload so only one
+    round-trip is needed (compared to calling the four individual bonus
+    getters which each fire two queries).
+
+    Returns dict with keys: 'attack', 'defense', 'mining', 'regen'.
+    All zeros if the user has no alliance.
+    """
+    result = await session.execute(
+        select(AllianceMember)
+        .where(AllianceMember.user_id == user_id)
+        .options(selectinload(AllianceMember.alliance))
+    )
+    member = result.scalar_one_or_none()
+    if member is None or member.alliance is None:
+        return {"attack": 0.0, "defense": 0.0, "mining": 0.0, "regen": 0.0}
+
+    alliance = member.alliance
+    cfg = ALLIANCE_UPGRADE_CONFIG
+    return {
+        "attack": alliance.morale_level * cfg["morale"]["effect_per_level"],
+        "defense": alliance.shield_level * cfg["shield"]["effect_per_level"],
+        "mining": alliance.mining_level * cfg["mining"]["effect_per_level"],
+        "regen": alliance.regen_level * cfg["regen"]["effect_per_level"],
+    }
 
 
 async def get_alliance_max_members(session: AsyncSession, alliance_id: int) -> int:

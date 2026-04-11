@@ -38,12 +38,41 @@ from bot.models.user import User
 from bot.models.virus import Virus, VirusBranch, VirusUpgrade
 from bot.services.alliance import ALLIANCE_UPGRADE_CONFIG
 from bot.services.event import get_active_events, track_activity
-from bot.services.laboratory import calc_cost_multiplier, get_active_item_effect
+from bot.services.laboratory import calc_cost_multiplier, get_active_item_effect  # noqa: F401
 from bot.services.market import check_contract_completion
 from bot.services.mutation import get_active_mutations
 from bot.services.player import DEFAULT_VIRUS_NAME
 from bot.services.premium import get_perk_value
 from bot.utils.db_logger import log_event
+
+async def _load_active_items_bulk(
+    session: AsyncSession,
+    attacker_id: int,
+    victim_id: int,
+) -> dict[tuple[int, ItemType], bool]:
+    """Load active item effects for attacker and victim in one query."""
+    from bot.models.item import Item
+
+    relevant_types = [
+        ItemType.BIO_BOMB,
+        ItemType.VIRUS_ENHANCER,
+        ItemType.STEALTH_CLOAK,
+        ItemType.SHIELD_BOOST,
+    ]
+    now = _now_utc()
+    result = await session.execute(
+        select(Item).where(
+            Item.owner_id.in_([attacker_id, victim_id]),
+            Item.item_type.in_(relevant_types),
+            Item.is_used == True,  # noqa: E712
+            Item.effect_expires_at > now,
+        )
+    )
+    effects: dict[tuple[int, ItemType], bool] = {}
+    for item in result.scalars().all():
+        effects[(item.owner_id, item.item_type)] = True
+    return effects
+
 
 # Base damage per tick before lethality adjustments
 BASE_DAMAGE_PER_TICK: float = 5.0
@@ -375,11 +404,12 @@ async def attack_player(
         else 0.0
     )
 
-    # --- Laboratory item effects ---
-    has_bio_bomb = await get_active_item_effect(session, attacker_id, ItemType.BIO_BOMB)
-    has_enhancer = await get_active_item_effect(session, attacker_id, ItemType.VIRUS_ENHANCER)
-    has_cloak = await get_active_item_effect(session, attacker_id, ItemType.STEALTH_CLOAK)  # noqa: F841
-    has_shield = await get_active_item_effect(session, victim_id, ItemType.SHIELD_BOOST)
+    # --- Laboratory item effects (single bulk query instead of 4 sequential) ---
+    active_effects = await _load_active_items_bulk(session, attacker_id, victim_id)
+    has_bio_bomb = active_effects.get((attacker_id, ItemType.BIO_BOMB), False)
+    has_enhancer = active_effects.get((attacker_id, ItemType.VIRUS_ENHANCER), False)
+    has_cloak    = active_effects.get((attacker_id, ItemType.STEALTH_CLOAK), False)  # noqa: F841, E221
+    has_shield   = active_effects.get((victim_id,   ItemType.SHIELD_BOOST), False)  # noqa: E221
 
     # --- Infection probability (exponential formula with BARRIER) ---
     # Base: asymptotic curve from 35% → 90%, reduced by BARRIER upgrade levels. Clamped 5%–90%.
@@ -709,8 +739,7 @@ async def try_cure(
     cost = math.ceil(infection.damage_per_tick * CURE_COST_MULTIPLIER * cost_multiplier)
 
     # Debt cap: -(total_level * 200). Allow cure if it doesn't exceed debt cap.
-    user_total_level = await _get_total_level(session, user_id)
-    debt_cap = -(user_total_level * 200)
+    debt_cap = -(victim_total * 200)
     if user.bio_coins - cost < debt_cap:
         return False, (
             f"Недостаточно 🧫 BioCoins даже для долга. "

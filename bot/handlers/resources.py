@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.common import back_button
 from bot.keyboards.resources import resources_menu_kb
 from bot.services.donation import EXCHANGE_RATE, convert_premium_to_bio
-from bot.services.resource import claim_daily_bonus, mine_resources
+from bot.services.resource import claim_daily_bonus, get_balance, mine_resources
 from bot.utils.chat import smart_reply
 
 router = Router(name="resources")

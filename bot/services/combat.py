@@ -193,18 +193,21 @@ async def attack_player(
     if victim.created_at and (_now_utc() - victim.created_at) < timedelta(hours=24):
         return False, "🛡 Этот игрок под защитой новичка (24 часа).", None
 
-    # --- Cooldown: look at last infection this attacker has sent (any victim) ---
+    # --- Cooldown: look at last attack attempt (success or miss) ---
+    # Using AttackAttempt (not Infection) ensures the timer resets on every
+    # actual attack, including circular-infection skips where no Infection
+    # row is written.
     attack_cooldown = await get_attack_cooldown(session, attacker_id)
-    last_attack_result = await session.execute(
-        select(Infection)
-        .where(Infection.attacker_id == attacker_id)
-        .order_by(Infection.started_at.desc())
+    last_attempt_result = await session.execute(
+        select(AttackAttempt)
+        .where(AttackAttempt.attacker_id == attacker_id)
+        .order_by(AttackAttempt.attempted_at.desc())
         .limit(1)
     )
-    last_attack = last_attack_result.scalar_one_or_none()
-    if last_attack is not None:
+    last_attempt = last_attempt_result.scalar_one_or_none()
+    if last_attempt is not None:
         now = _now_utc()
-        elapsed = now - last_attack.started_at
+        elapsed = now - last_attempt.attempted_at
         if elapsed < attack_cooldown:
             remaining = attack_cooldown - elapsed
             minutes = int(remaining.total_seconds() // 60)
